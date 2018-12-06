@@ -58,8 +58,9 @@ class Shift
         end
         step_by_minutes.map(&:min) # minute of hour from Time obj
       end
-    end.flatten
+    end
     minutes
+      .flatten
       .group_by(&:itself)
       .transform_values(&:size)
       .max_by { |_, v| v }
