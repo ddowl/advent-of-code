@@ -34,12 +34,46 @@ class Star
     @vel = vel
   end
 
+  def tick
+    pos.x += vel.x
+    pos.y += vel.y
+  end
+
+  def rewind
+    pos.x -= vel.x
+    pos.y -= vel.y
+  end
+
   def to_s
     "{pos=#{pos}, vel=#{vel}}"
   end
+end
 
-  def self.print_sky(stars)
-    points = stars.map(&:pos)
+# a collection of stars
+class Sky
+  def initialize(stars)
+    @stars = stars
+  end
+
+  def tick
+    @stars.each(&:tick)
+  end
+
+  def rewind
+    @stars.each(&:rewind)
+  end
+
+  def area
+    points = @stars.map(&:pos)
+    max_x = points.max_by(&:x).x
+    max_y = points.max_by(&:y).y
+    min_x = points.min_by(&:x).x
+    min_y = points.min_by(&:y).y
+    (max_x - min_x).abs * (max_y - min_y).abs
+  end
+
+  def to_s
+    points = @stars.map(&:pos)
     max_x = points.max_by(&:x).x
     max_y = points.max_by(&:y).y
     min_x = points.min_by(&:x).x
@@ -47,21 +81,24 @@ class Star
 
     points = points.map { |p| [p.x, p.y] }
 
+    res = ''
     (min_y..max_y).each do |y|
       (min_x..max_x).each do |x|
-        ink = points.include?([x, y]) ? '#' : '.'
-        print ink
+        res += points.include?([x, y]) ? '#' : '.'
       end
-      print "\n"
+      res += "\n"
     end
+    res
   end
+
+
 end
 
 def sign_parser(str, sign_str)
   sign_str.include?('-') ? -str.to_i : str.to_i
 end
 
-stars = File.readlines('example_input.txt').map do |line|
+stars = File.readlines('input.txt').map do |line|
   pos_x_sign, pos_x, pos_y_sign, pos_y, vel_x_sign, vel_x, vel_y_sign, vel_y =
     line.scan(/.*<([^\d]*)(\d+),([^\d]*)(\d+)>.*<([^\d]*)(\d+),([^\d]*)(\d+)>/).first
 
@@ -71,12 +108,20 @@ stars = File.readlines('example_input.txt').map do |line|
   vel_y = sign_parser(vel_y, vel_y_sign)
   Star.new(Position.new(pos_x, pos_y), Velocity.new(vel_x, vel_y))
 end
-puts stars
 
-Star.print_sky(stars)
-
-10.times do
-  # run the star movement simulation
+sky = Sky.new(stars)
+prev_area = (2**(0.size * 8 - 2) - 1) # Max Fixnum
+curr_area = sky.area
+i = 0
+while curr_area < prev_area do
+  i += 1
+  sky.tick
+  prev_area = curr_area
+  curr_area = sky.area
 end
+
+puts "Frame #{i - 1}"
+sky.rewind
+puts sky
 
 puts
