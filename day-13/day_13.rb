@@ -13,7 +13,7 @@ class Position
   end
 
   def <=>(o)
-    if @y != o.y
+    if @y == o.y
       @x <=> o.x
     else
       @y <=> o.y
@@ -33,6 +33,7 @@ class Cart
   include Comparable
 
   attr_reader :position
+  attr_accessor :collided
 
   CART_SHAPES = {
     :north => '^',
@@ -49,6 +50,7 @@ class Cart
     @position = position
     @direction_idx = CART_SHAPES.values.index(initial_shape)
     @intersection_opt_idx = 0
+    @collided = false
   end
 
   def shape
@@ -162,7 +164,7 @@ end
 # ===================================================================== #
 
 
-tracks = File.readlines('example_crashes_input.txt').map { |line| line.chomp.chars }
+tracks = File.readlines('input.txt').map { |line| line.chomp.chars }
 
 initial_carts = []
 tracks.each_with_index do |row, i|
@@ -188,13 +190,12 @@ cart_positions = []
 # part 1
 until dups(cart_positions)
   carts.sort.reverse.each do |c|
+    c.tick(tracks)
     cart_positions = carts.map(&:position)
     d = dups(cart_positions)
     if d
       break
     end
-
-    c.tick(tracks)
   end
 end
 
@@ -203,26 +204,20 @@ puts "part 1: #{dups(cart_positions)}"
 # part 2
 carts = Marshal.load(Marshal.dump(initial_carts))
 
-until carts.size <= 1
-  sorted_carts = carts.sort.reverse
-  sorted_carts.each do |c|
+loop do
+  carts = carts.sort
+  carts.each do |cart|
+    cart.tick(tracks)
     cart_positions = carts.map(&:position)
     d = dups(cart_positions)
-    puts carts_on_tracks(tracks, carts)
-    # p cart_positions
     if d
-      # p d
-      sorted_carts.delete_if { |cart| cart.position == d }
-      carts.delete_if { |cart| cart.position == d }
-      break
-      # if carts.size == 1
-      #   p carts.first
-      #   break
-      # end
+      carts.select { |c| c.position == d }.each { |c| c.collided = true }
     end
-
-    c.tick(tracks)
   end
+
+  carts = carts.delete_if(&:collided)
+
+  break if carts.size == 1
 end
 
 puts "part 2: #{carts.first}"
