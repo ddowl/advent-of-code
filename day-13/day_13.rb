@@ -19,6 +19,14 @@ class Position
       @y <=> o.y
     end
   end
+
+  def to_s
+    "{#{x}, #{y}}"
+  end
+
+  def inspect
+    to_s
+  end
 end
 
 class Cart
@@ -59,6 +67,14 @@ class Cart
 
   def <=>(o)
     @position <=> o.position
+  end
+
+  def to_s
+    "{pos:#{position}, direction:#{direction}}"
+  end
+
+  def inspect
+    to_s
   end
 
   private
@@ -146,7 +162,7 @@ end
 # ===================================================================== #
 
 
-tracks = File.readlines('input.txt').map { |line| line.chomp.chars }
+tracks = File.readlines('example_crashes_input.txt').map { |line| line.chomp.chars }
 
 initial_carts = []
 tracks.each_with_index do |row, i|
@@ -165,7 +181,6 @@ tracks.each_with_index do |row, i|
 end
 
 carts = Marshal.load(Marshal.dump(initial_carts))
-puts carts_on_tracks(tracks, carts)
 
 cart_positions = []
 # part 1
@@ -173,10 +188,7 @@ until dups(cart_positions)
   carts.sort.reverse.each do |c|
     cart_positions = carts.map(&:position)
     d = dups(cart_positions)
-    # puts carts_on_tracks(tracks, carts)
-    # p cart_positions
     if d
-      p d
       break
     end
 
@@ -184,28 +196,32 @@ until dups(cart_positions)
   end
 end
 
-puts
+puts "part 1: #{dups(cart_positions)}"
 
-# # part 2
-# carts = Marshal.load(Marshal.dump(initial_carts))
-# until carts.size == 1
-#   carts.sort.reverse.each do |c|
-#     cart_positions = carts.map(&:position)
-#     d = dups(cart_positions)
-#     # puts carts_on_tracks(tracks, carts)
-#     # p cart_positions
-#     if d
-#       # p d
-#       carts.delete_if { |cart| cart.position == d }
-#       p carts
-#       if carts.size == 1
-#         p carts.first
-#         break
-#       end
-#     end
-#
-#     c.tick(tracks)
-#   end
-# end
-#
-# puts
+# part 2
+carts = Marshal.load(Marshal.dump(initial_carts))
+
+until carts.size <= 1
+  sorted_carts = carts.sort.reverse
+  sorted_carts.each do |c|
+    cart_positions = carts.map(&:position)
+    d = dups(cart_positions)
+    puts carts_on_tracks(tracks, carts)
+    # p cart_positions
+    if d
+      # p d
+      sorted_carts.delete_if { |cart| cart.position == d }
+      carts.delete_if { |cart| cart.position == d }
+      break
+      # if carts.size == 1
+      #   p carts.first
+      #   break
+      # end
+    end
+
+    c.tick(tracks)
+  end
+end
+
+puts "part 2: #{carts.first}"
+puts
