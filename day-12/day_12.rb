@@ -15,7 +15,8 @@ RULE_LEN = RULES.first.length
 class Pots
   def initialize(state_str, zero_idx)
     @pots = state_str
-    p @pots
+
+    # ensure that the pots are buffered by 4 empty pots on either side
     first_plant_idx = @pots.index('#')
     if first_plant_idx < 4
       num_buffer_pots = 4 - first_plant_idx
@@ -24,14 +25,14 @@ class Pots
     end
 
     last_plant_idx = @pots.rindex('#')
-    if last_plant_idx < @pots.length - 4
-      num_buffer_pots = @pots.length - 4 - last_plant_idx
-      @pots += '.' * num_buffer_pots
+    if @pots.length - last_plant_idx < 5
+      num_buffer_pots = 5 - (@pots.length - last_plant_idx)
+      @pots = @pots + '.' * num_buffer_pots
     end
 
-    p first_plant_idx
-    p last_plant_idx
-    p @pots.length
+    # p @pots
+    # p last_plant_idx
+    # p @pots.length
   end
 
   def next_gen
@@ -53,11 +54,20 @@ class Pots
 end
 
 pots = Pots.new(initial_state_str, 0)
+# i = 0
 # 50_000_000_000.times do
+#    puts i
+#    i += 1
 20.times do
   pots = pots.next_gen
 end
 p pots
 p pots.index_sum
+
+# part 2
+# 50 billion is too many to iterate over. We only need to find the sum, so let's try to find a pattern in the data
+
+pots = Pots.new(initial_state_str, 0)
+p 20.times.map { p = pots; pots = pots.next_gen; return p }.map { |pots| pots.index_sum }
 
 puts
