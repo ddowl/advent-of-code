@@ -182,6 +182,8 @@ end
 
 carts = Marshal.load(Marshal.dump(initial_carts))
 
+# Try to model tracks and carts together in a model that can be "tick"'d atomically
+
 cart_positions = []
 # part 1
 until dups(cart_positions)
