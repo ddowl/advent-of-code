@@ -24,14 +24,7 @@ end
 class Cart
   include Comparable
 
-  attr_reader :position, :direction
-
-  CART_DIRECTION = {
-    '^' => :north,
-    '>' => :east,
-    'v' => :south,
-    '<' => :west,
-  }
+  attr_reader :position
 
   CART_SHAPES = {
     :north => '^',
@@ -41,24 +34,27 @@ class Cart
   }
 
   INTERSECTION_OPTIONS = [:left, :straight, :right]
+  TRACK_CHARS = %w(/ \\ + - |)
+  DIRECTIONS = [:north, :east, :south, :west]
 
   def initialize(position, initial_shape)
     @position = position
-    @direction = CART_DIRECTION[initial_shape]
+    @direction_idx = CART_SHAPES.values.index(initial_shape)
     @intersection_opt_idx = 0
   end
 
   def shape
-    CART_SHAPES[@direction]
+    CART_SHAPES[direction]
+  end
+
+  def direction
+    DIRECTIONS[@direction_idx]
   end
 
   def tick(tracks)
-    next_pos = get_next_position
-    env = tracks[next_pos.y][next_pos.x]
-    new_direction = get_next_direction(env)
-
-    @position = next_pos
-    @direction = new_direction
+    @position = get_next_position
+    env = tracks[@position.y][@position.x]
+    @direction_idx = get_next_direction_idx(env)
   end
 
   def <=>(o)
@@ -68,7 +64,7 @@ class Cart
   private
 
   def get_next_position
-    dx, dy = case @direction
+    dx, dy = case direction
              when :north
                [0, -1]
              when :east
@@ -84,95 +80,52 @@ class Cart
     Position.new(@position.x + dx, @position.y + dy)
   end
 
-  def get_next_direction(env)
-    case @direction
+  def get_next_direction_idx(env)
+    raise "how tf did we get off the tracks? #{env} #{@position}" unless TRACK_CHARS.include?(env)
+    raise "wait, what?" unless DIRECTIONS.include?(direction)
+    return @direction_idx if env == '-' || env == '|'
+    return intersection if env == '+'
+
+    case direction
     when :north
       if env == '/'
-        :east
+        DIRECTIONS.index(:east)
       elsif env == '\\'
-        :west
-      elsif env == '+'
-        turn = INTERSECTION_OPTIONS[@intersection_opt_idx]
-        @intersection_opt_idx = (@intersection_opt_idx + 1) % INTERSECTION_OPTIONS.size
-        case turn
-        when :left
-          :west
-        when :straight
-          @direction
-        when :right
-          :east
-        end
-      elsif env == '-' || env == '|'
-        @direction
-      else
-        raise "how tf did we get off the tracks? #{env} #{next_pos.inspect}"
+        DIRECTIONS.index(:west)
       end
     when :south
       if env == '/'
-        :west
+        DIRECTIONS.index(:west)
       elsif env == '\\'
-        :east
-      elsif env == '+'
-        turn = INTERSECTION_OPTIONS[@intersection_opt_idx]
-        @intersection_opt_idx = (@intersection_opt_idx + 1) % INTERSECTION_OPTIONS.size
-        case turn
-        when :left
-          :east
-        when :straight
-          @direction
-        when :right
-          :west
-        end
-      elsif env == '-' || env == '|'
-        @direction
-      else
-        raise "how tf did we get off the tracks? #{env} #{next_pos.inspect}"
+        DIRECTIONS.index(:east)
       end
     when :west
       if env == '/'
-        :south
+        DIRECTIONS.index(:south)
       elsif env == '\\'
-        :north
-      elsif env == '+'
-        turn = INTERSECTION_OPTIONS[@intersection_opt_idx]
-        @intersection_opt_idx = (@intersection_opt_idx + 1) % INTERSECTION_OPTIONS.size
-        case turn
-        when :left
-          :south
-        when :straight
-          @direction
-        when :right
-          :north
-        end
-      elsif env == '-' || env == '|'
-        @direction
-      else
-        raise "how tf did we get off the tracks? #{env} #{next_pos.inspect}"
+        DIRECTIONS.index(:north)
       end
     when :east
       if env == '/'
-        :north
+        DIRECTIONS.index(:north)
       elsif env == '\\'
-        :south
-      elsif env == '+'
-        turn = INTERSECTION_OPTIONS[@intersection_opt_idx]
-        @intersection_opt_idx = (@intersection_opt_idx + 1) % INTERSECTION_OPTIONS.size
-        case turn
-        when :left
-          :north
-        when :straight
-          @direction
-        when :right
-          :south
-        end
-      elsif env == '-' || env == '|'
-        @direction
-      else
-        raise "how tf did we get off the tracks? #{env} #{next_pos.inspect}"
+        DIRECTIONS.index(:south)
       end
-    else
-      raise "wtf??"
     end
+  end
+
+  def intersection
+    turn = INTERSECTION_OPTIONS[@intersection_opt_idx]
+    @intersection_opt_idx = (@intersection_opt_idx + 1) % INTERSECTION_OPTIONS.size
+    idx = case turn
+          when :left
+            @direction_idx - 1
+          when :straight
+            @direction_idx
+          when :right
+            @direction_idx + 1
+          end
+    idx % DIRECTIONS.size
   end
 end
 
@@ -188,6 +141,10 @@ end
 def dups(arr)
   arr.detect { |e| arr.count(e) > 1 }
 end
+
+
+# ===================================================================== #
+
 
 tracks = File.readlines('input.txt').map { |line| line.chomp.chars }
 
