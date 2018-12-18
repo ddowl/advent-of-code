@@ -1,7 +1,7 @@
 # Store each generation of pots in a an array the with some empty pots buffering the left/rightmost plotted plant.
 # Keep a variable to store the real index 0, so we can sum up the potted indices at the end.
 
-input_filename = 'example_input.txt'
+input_filename = 'input.txt'
 initial_state_str = File.read(input_filename).split(' ')[2]
 p initial_state_str
 
@@ -15,6 +15,7 @@ RULE_LEN = RULES.first.length
 class Pots
   def initialize(state_str, zero_idx)
     @pots = state_str
+    @zero_idx = zero_idx
 
     # ensure that the pots are buffered by 4 empty pots on either side
     first_plant_idx = @pots.index('#')
@@ -29,10 +30,6 @@ class Pots
       num_buffer_pots = 5 - (@pots.length - last_plant_idx)
       @pots = @pots + '.' * num_buffer_pots
     end
-
-    # p @pots
-    # p last_plant_idx
-    # p @pots.length
   end
 
   def next_gen
@@ -54,10 +51,6 @@ class Pots
 end
 
 pots = Pots.new(initial_state_str, 0)
-# i = 0
-# 50_000_000_000.times do
-#    puts i
-#    i += 1
 20.times do
   pots = pots.next_gen
 end
@@ -68,6 +61,15 @@ p pots.index_sum
 # 50 billion is too many to iterate over. We only need to find the sum, so let's try to find a pattern in the data
 
 pots = Pots.new(initial_state_str, 0)
-p 20.times.map { p = pots; pots = pots.next_gen; return p }.map { |pots| pots.index_sum }
+pots_at_each_gen = [pots]
+150.times do
+  pots = pots.next_gen
+  pots_at_each_gen << pots
+end
+p pots_at_each_gen.map.with_index { |pots, i| [i, pots.index_sum] }
+
+# From Gen #109 an onward, the sum increases by 40 each time
+p 6044 + (50_000_000_000 - 109) * 40
+
 
 puts
