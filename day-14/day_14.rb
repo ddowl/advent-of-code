@@ -43,7 +43,7 @@ class RecipeSim
   end
 
   def last(n)
-    ((size - n)..size).map { |idx| @scoreboard[idx] }
+    ((size - n)...size).map { |idx| @scoreboard[idx] }
   end
 end
 
@@ -67,12 +67,11 @@ def part2
 
   loop do
     sim.tick
-    # p sim.size
     last_digits = sim.last(PUZZLE_INPUT.size + 1)
     opt1 = last_digits[0..-2].join
     opt2 = last_digits[1..-1].join
     if opt1 == PUZZLE_INPUT
-      return sim.size - PUZZLE_INPUT.size + 1
+      return sim.size - (PUZZLE_INPUT.size + 1)
     elsif opt2 == PUZZLE_INPUT
       return sim.size - PUZZLE_INPUT.size
     end
