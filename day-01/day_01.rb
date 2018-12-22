@@ -1,6 +1,6 @@
 require 'set'
 
-sum = File.readlines('input.txt').map(&:to_i).reduce(:+)
+sum = File.readlines('input.txt').map(&:to_i).sum
 puts sum
 
 sums = Set.new()
