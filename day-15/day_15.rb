@@ -1,4 +1,4 @@
-DEBUG = true
+DEBUG = false
 
 def putd(str)
   puts str if DEBUG
@@ -30,6 +30,15 @@ class Position
     (@x - o.x).abs + (@y - o.y).abs
   end
 
+  def adjacent
+    [
+      Position.new(@x, @y + 1),
+      Position.new(@x, @y - 1),
+      Position.new(@x + 1, @y),
+      Position.new(@x - 1, @y),
+    ]
+  end
+
   def to_s
     "{#{x}, #{y}}"
   end
@@ -51,10 +60,10 @@ class Unit
   # returns false when combat is over
   def take_turn(units, field)
     targets = units.reject { |unit| unit.team == team }
-    # p targets
     return false if targets.empty?
-    target_attack_squares_in_range = targets.map { |t| t.in_range_squares(field) }.flatten
-    in_range_of_target = target_attack_squares_in_range.any? { |target_pos| target_pos == @pos }
+    target_attack_squares_in_range = targets.map { |t| field.in_range_squares(t.pos) }.flatten
+    adj = @pos.adjacent
+    in_range_of_target = targets.any? { |t| adj.include?(t.pos) }
     open_squares_in_range = !target_attack_squares_in_range.empty?
 
     if !in_range_of_target && !open_squares_in_range # can't move or attack, so end turn
@@ -72,52 +81,38 @@ class Unit
     true
   end
 
-  def in_range_squares(field)
-    adjacent_squares
-      .reject { |pos| field[pos.y][pos.x] != '.' }
-  end
+
 
   private
 
   def move(field, squares)
     # first, chose a square to target
-    reachable_squares = reachable(field, squares)
-    min_distance = reachable_squares.map { |square| @pos.hamilton_distance(square) }.min
+    rss = reachable_squares(field, squares)
+    min_distance = rss.map { |square| @pos.hamilton_distance(square) }.min
     putd "min_distance: #{min_distance}"
-    nearest_squares = reachable_squares.select { |square| @pos.hamilton_distance(square) == min_distance }
+    nearest_squares = rss.select { |square| @pos.hamilton_distance(square) == min_distance }
     putd "nearest_squares: #{nearest_squares}"
     chosen_target_square = nearest_squares.sort.first
     putd "chosen_target_square: #{chosen_target_square}"
 
     # then, determine the best way to move in that direction
-    adj_distances = adjacent_squares.map { |adj| [adj, adj.hamilton_distance(chosen_target_square)] }.to_h
+    adj_distances = @pos.adjacent.map { |adj| [adj, adj.hamilton_distance(chosen_target_square)] }.to_h
     min_distance_from_adj = adj_distances.values.min
     best_adj_options = adj_distances.select { |_, dist| dist == min_distance_from_adj }.keys
     chosen_adj = best_adj_options.sort.first
 
     # update the field to reflect our new position
-    field[@pos.y][@pos.x] = '.'
+    field.put(@pos, '.')
     @pos = chosen_adj
-    field[@pos.y][@pos.x] = team
+    field.put(@pos, team)
   end
 
   def attack
 
   end
 
-
-
-  def adjacent_squares
-    [
-      Position.new(@pos.x, @pos.y + 1),
-      Position.new(@pos.x, @pos.y - 1),
-      Position.new(@pos.x + 1, @pos.y),
-      Position.new(@pos.x - 1, @pos.y),
-    ]
-  end
-
-  def reachable(field, squares)
-    squares
+  def reachable_squares(field, squares)
+    squares.select { |square| field.path_exists?(@pos, square) }
   end
 end
 
@@ -126,8 +121,41 @@ class Battlefield
     @grid = grid
   end
 
+  def get(pos)
+    @grid[pos.y][pos.x]
+  end
+
+  def put(pos, val)
+    @grid[pos.y][pos.x] = val
+  end
+
+  def in_range_squares(pos)
+    pos.adjacent
+      .reject { |p| get(p) != '.' }
+  end
+
+  def path_exists?(src, dest)
+    # putd "does path exist between #{src} and #{dest}?"
+    seen_positions = [src]
+    in_range_squares(src)
+      .map { |adj| path_exists_helper(adj, dest, seen_positions) }
+      .inject(false) { |past, in_range| past || in_range }
+  end
+
   def to_s
     @grid.map(&:join).join("\n")
+  end
+
+  private
+
+  def path_exists_helper(src, dest, seen_positions)
+    return false if seen_positions.include?(src) || get(src) != '.'
+    return true if src == dest
+
+    seen_positions.push(src)
+    in_range_squares(src)
+      .map { |adj| path_exists_helper(adj, dest, seen_positions) }
+      .inject(false) { |past, in_range| past || in_range }
   end
 end
 
@@ -161,10 +189,11 @@ puts "Initial battlefield"
 puts battlefield
 i = 1
 3.times do
-  round(units, grid)
+  round(units, battlefield)
   puts "Round #{i}"
   puts battlefield
   i += 1
 end
 
+puts
 puts
