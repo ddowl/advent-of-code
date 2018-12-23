@@ -1,3 +1,6 @@
+require 'set'
+require 'ruby-prof'
+
 DEBUG = false
 
 def putd(str)
@@ -18,6 +21,12 @@ class Position
       @y == o.y
   end
 
+  alias eql? ==
+
+  def hash
+    @x ^ (31 * @y)
+  end
+
   def <=>(o)
     if @y == o.y
       @x <=> o.x
@@ -26,11 +35,16 @@ class Position
     end
   end
 
-  def hamilton_distance(o)
-    (@x - o.x).abs + (@y - o.y).abs
-  end
-
   def adjacent
+    # return @adjacent unless @adjacent.nil?
+    # @adjacent = [
+    #   Position.new(@x, @y + 1),
+    #   Position.new(@x, @y - 1),
+    #   Position.new(@x + 1, @y),
+    #   Position.new(@x - 1, @y),
+    # ]
+    # @adjacent
+
     [
       Position.new(@x, @y + 1),
       Position.new(@x, @y - 1),
@@ -184,9 +198,14 @@ class Battlefield
     on_field?(pos) && vacant?(pos)
   end
 
+  def squares_reachable_from(pos)
+
+  end
+
   def path(src, dest)
     putd "finding path between #{src} and #{dest}"
-    visited = []
+    visited = Set.new()
+    open_set = Set.new()
     processing = [src]
     # map of edges from dest to src
     edges = {}
@@ -196,17 +215,18 @@ class Battlefield
 
     until processing.empty?
       curr = processing.shift
+      open_set.delete(curr)
 
       return make_path(curr, edges) if curr == dest
 
       curr.adjacent.select { |adj| open?(adj) }.each do |adj|
-        if !visited.include?(adj) && !processing.include?(adj)
-          edges[adj] = curr
-          processing.push(adj)
-        end
+        next if visited.include?(adj) || processing.include?(adj)
+        edges[adj] = curr
+        processing.push(adj)
+        open_set.add(adj)
       end
 
-      visited.push(curr)
+      visited.add(curr)
     end
     nil
   end
@@ -249,6 +269,7 @@ def do_round(units, field)
   starting_positions.each do |pos|
     unit = position_to_unit[pos]
     putd "curr unit: #{unit.team} #{pos} #{unit.hp}"
+
     unit.take_turn(units.reject { |u| u.pos == pos }, field)
   end
 end
@@ -257,6 +278,8 @@ puts "Initial battlefield"
 puts battlefield
 units.each { |u| p u }
 i = 0
+
+RubyProf.start
 begin
   loop do
     do_round(units, battlefield)
@@ -280,6 +303,11 @@ rescue
   puts "remaining_hp: #{remaining_hp}"
   puts "outcome: #{outcome}"
 end
+result = RubyProf.stop
+
+# print a flat profile to text
+printer = RubyProf::FlatPrinter.new(result)
+printer.print(STDOUT)
 
 puts
 puts
