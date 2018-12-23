@@ -7,6 +7,9 @@ def putd(str)
   puts str if DEBUG
 end
 
+class FinishedCombat < StandardError
+end
+
 class Position
   include Comparable
   attr_accessor :x, :y
@@ -23,9 +26,11 @@ class Position
 
   alias eql? ==
 
-  def hash
-    @x ^ (31 * @y)
-  end
+  # MFing hashing is driving me NUTS
+  # Just 'having' the hash function changes the behavior in unexpected ways
+  # def hash
+  #   super
+  # end
 
   def <=>(o)
     if @y == o.y
@@ -36,15 +41,6 @@ class Position
   end
 
   def adjacent
-    # return @adjacent unless @adjacent.nil?
-    # @adjacent = [
-    #   Position.new(@x, @y + 1),
-    #   Position.new(@x, @y - 1),
-    #   Position.new(@x + 1, @y),
-    #   Position.new(@x - 1, @y),
-    # ]
-    # @adjacent
-
     [
       Position.new(@x, @y + 1),
       Position.new(@x, @y - 1),
@@ -80,8 +76,7 @@ class Unit
     return unless is_alive
 
     targets = units.reject { |unit| unit.team == team || !unit.is_alive }
-    # p targets
-    raise "everyone is dead!" if targets.empty?
+    raise FinishedCombat if targets.empty?
 
     open_target_squares = targets
                             .map { |t| t.pos.adjacent }
@@ -116,19 +111,28 @@ class Unit
   def move(field, squares)
     # first, chose a square to target
     # it needs to be reachable
-    reachable_squares = squares
-                          .map { |t| [t, field.path(@pos, t)] }
-                          .reject { |_, path| path.nil? }
-                          .map { |t, path| [t, path.length] }
-                          .to_h
+    distance_field = field.paths_from(@pos)
+
+    # Intersection relies on hashing, so we have to do this
+    reachable_squares = distance_field.keys.select { |sq| squares.include?(sq) }
+    # p distance_field
+    # p squares
+    # p reachable_squares
+    # reachable_squares = squares
+    #                       .map { |t| [t, field.path(@pos, t)] }
+    #                       .reject { |_, path| path.nil? }
+    #                       .map { |t, path| [t, path.length] }
+    #                       .to_h
     # p reachable_squares
     return if reachable_squares.empty?
     # and we'll pick the closest one
 
-    putd "reachable_squares: #{reachable_squares.keys}"
-    min_distance = reachable_squares.values.min
+    putd "reachable_squares: #{reachable_squares}"
+    # min_distance =  reachable_squares.values.min
+    min_distance =  reachable_squares.map { |sq| distance_field[sq] }.min
     putd "min_distance: #{min_distance}"
-    nearest_squares = reachable_squares.select { |_, len| len == min_distance }.keys
+    # nearest_squares =  reachable_squares.select { |_, len| len == min_distance }.keys
+    nearest_squares = reachable_squares.select { |sq| distance_field[sq] == min_distance }
     putd "nearest_squares: #{nearest_squares}"
     chosen_target_square = nearest_squares.sort.first
     putd "chosen_target_square: #{chosen_target_square}"
@@ -198,14 +202,41 @@ class Battlefield
     on_field?(pos) && vacant?(pos)
   end
 
-  def squares_reachable_from(pos)
+  # return a map of positions to distances to that distance
+  # from the given parameter
+  # This way we won't need to re-traverse the grid for every (src, dest) tuple
+  def paths_from(pos)
+    putd "finding all paths from #{pos}"
+    visited = []
+    open_set = []
 
+    # holds position and distance from source
+    processing = [[pos, 0]]
+
+    # map of edges from dest to src
+    distances = {}
+
+    until processing.empty?
+      curr, dist = processing.shift
+
+      curr
+        .adjacent
+        .select { |adj| open?(adj) && !visited.include?(adj) && !open_set.include?(adj) }
+        .each do |adj|
+        next_dist = dist + 1
+        distances[adj] = next_dist
+        processing.push([adj, next_dist])
+        open_set.push(adj)
+      end
+
+      visited.push(curr)
+    end
+    distances
   end
 
   def path(src, dest)
     putd "finding path between #{src} and #{dest}"
-    visited = Set.new()
-    open_set = Set.new()
+    visited = []
     processing = [src]
     # map of edges from dest to src
     edges = {}
@@ -215,18 +246,18 @@ class Battlefield
 
     until processing.empty?
       curr = processing.shift
-      open_set.delete(curr)
 
       return make_path(curr, edges) if curr == dest
 
-      curr.adjacent.select { |adj| open?(adj) }.each do |adj|
-        next if visited.include?(adj) || processing.include?(adj)
+      curr
+        .adjacent
+        .select { |adj| open?(adj) && !visited.include?(adj) && !processing.include?(adj) }
+        .each do |adj|
         edges[adj] = curr
         processing.push(adj)
-        open_set.add(adj)
       end
 
-      visited.add(curr)
+      visited.push(curr)
     end
     nil
   end
@@ -279,7 +310,7 @@ puts battlefield
 units.each { |u| p u }
 i = 0
 
-RubyProf.start
+# RubyProf.start
 begin
   loop do
     do_round(units, battlefield)
@@ -288,8 +319,9 @@ begin
     puts "After Round #{i}"
     puts battlefield
     units.each { |u| p u }
+    break if i == 200 # safety against my stupidity
   end
-rescue
+rescue FinishedCombat
   puts "rescued!"
   full_rounds = i
   remaining_hp = units
@@ -303,11 +335,11 @@ rescue
   puts "remaining_hp: #{remaining_hp}"
   puts "outcome: #{outcome}"
 end
-result = RubyProf.stop
-
-# print a flat profile to text
-printer = RubyProf::FlatPrinter.new(result)
-printer.print(STDOUT)
+# result = RubyProf.stop
+#
+# # print a flat profile to text
+# printer = RubyProf::FlatPrinter.new(result)
+# printer.print(STDOUT)
 
 puts
 puts
