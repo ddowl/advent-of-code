@@ -1,6 +1,20 @@
 defmodule Fuel do
-  def required(mass) do
+  def module_fuel(mass) do
     floor(mass / 3) - 2
+  end
+
+  def module_fuel_integral(mass) do
+    fuel_weights_list(mass) |> Enum.drop(1) |> Enum.sum()
+  end
+
+  defp fuel_weights_list(mass) do
+    fuel = module_fuel(mass)
+
+    if fuel <= 0 do
+      [mass]
+    else
+      [mass | fuel_weights_list(fuel)]
+    end
   end
 end
 
@@ -14,7 +28,12 @@ module_masses =
     n
   end)
 
-total_fuel = module_masses |> Enum.map(&Fuel.required/1) |> Enum.sum()
+total_fuel = module_masses |> Enum.map(&Fuel.module_fuel/1) |> Enum.sum()
 
 # Part One
 IO.inspect(total_fuel)
+
+total_fuel_integral = module_masses |> Enum.map(&Fuel.module_fuel_integral/1) |> Enum.sum()
+
+# Part Two
+IO.inspect(total_fuel_integral)
