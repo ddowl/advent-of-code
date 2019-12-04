@@ -46,7 +46,7 @@ end
 # Intersection point is x coord for vertical line, and y coord for vertical line
 # Determine manhattan distance for each, extract min
 
-{:ok, contents} = File.read("ex2.txt")
+{:ok, contents} = File.read("input.txt")
 
 wire_instructions =
   contents
@@ -87,17 +87,21 @@ intersection_points =
         {a_x1, b_y1}
 
       !a_is_vertical && b_is_vertical ->
-        {a_x1, b_y1}
+        {b_x1, a_y1}
 
       true ->
-        raise "oh no"
+        # overlapping vertical or horizontal lines can have infinite intersection points
+        nil
     end
   end
 
 closest_intersection_distance =
   intersection_points
-  |> Enum.reject(fn point -> point == {0, 0} end)
+  |> Enum.reject(fn point -> is_nil(point) || point == {0, 0} end)
+  |> IO.inspect()
   |> Enum.map(&Grid.manhattan_distance_from_origin/1)
+  |> IO.inspect()
   |> Enum.min()
 
+# Part 1
 IO.inspect(closest_intersection_distance)
