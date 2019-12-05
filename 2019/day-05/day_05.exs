@@ -5,6 +5,10 @@ defmodule Intcode do
   @mult_op 2
   @read_op 3
   @write_op 4
+  @jump_if_true_op 5
+  @jump_if_false_op 6
+  @less_than_op 7
+  @equals_op 8
 
   # Modes
   @position_mode 0
@@ -28,18 +32,16 @@ defmodule Intcode do
       end)
       |> elem(0)
 
-    # IO.inspect({instr, modes})
-
     case op do
       @halt_op ->
         int_array
 
       @add_op ->
-        new_array = run_bin_op(int_array, ip, modes, &+/2)
+        new_array = math_op(int_array, ip, modes, &+/2)
         execute(new_array, ip + 4)
 
       @mult_op ->
-        new_array = run_bin_op(int_array, ip, modes, &*/2)
+        new_array = math_op(int_array, ip, modes, &*/2)
         execute(new_array, ip + 4)
 
       @read_op ->
@@ -49,9 +51,25 @@ defmodule Intcode do
         execute(new_array, ip + 2)
 
       @write_op ->
-        write_pos = elem(int_array, ip + 1)
-        IO.puts(elem(int_array, write_pos))
+        write_val = get_arg(int_array, ip, 1, modes)
+        IO.puts(write_val)
         execute(int_array, ip + 2)
+
+      @jump_if_true_op ->
+        next_ip = jump_test(int_array, ip, modes, fn x -> x != 0 end)
+        execute(int_array, next_ip)
+
+      @jump_if_false_op ->
+        next_ip = jump_test(int_array, ip, modes, fn x -> x == 0 end)
+        execute(int_array, next_ip)
+
+      @less_than_op ->
+        new_array = compare_op(int_array, ip, modes, &</2)
+        execute(new_array, ip + 4)
+
+      @equals_op ->
+        new_array = compare_op(int_array, ip, modes, &==/2)
+        execute(new_array, ip + 4)
 
       x ->
         raise "unknown op: #{x}"
@@ -62,12 +80,34 @@ defmodule Intcode do
     int_array |> put_elem(1, noun) |> put_elem(2, verb)
   end
 
-  defp run_bin_op(int_array, ip, modes, f) do
+  defp math_op(int_array, ip, modes, f) do
     arg1 = get_arg(int_array, ip, 1, modes)
     arg2 = get_arg(int_array, ip, 2, modes)
     dest_pos = elem(int_array, ip + 3)
 
     put_elem(int_array, dest_pos, f.(arg1, arg2))
+  end
+
+  defp compare_op(int_array, ip, modes, comp_fn) do
+    arg1 = get_arg(int_array, ip, 1, modes)
+    arg2 = get_arg(int_array, ip, 2, modes)
+    dest_pos = elem(int_array, ip + 3)
+
+    test_result = if comp_fn.(arg1, arg2), do: 1, else: 0
+
+    put_elem(int_array, dest_pos, test_result)
+  end
+
+  defp jump_test(int_array, ip, modes, test_fn) do
+    test_arg = get_arg(int_array, ip, 1, modes)
+    jump_addr_arg = get_arg(int_array, ip, 2, modes)
+
+    next_ip =
+      if test_fn.(test_arg) do
+        jump_addr_arg
+      else
+        ip + 3
+      end
   end
 
   defp get_arg(int_array, ip, arg_n, modes) do
@@ -80,7 +120,6 @@ defmodule Intcode do
   end
 end
 
-# Part 1: Diagnostic code
 {:ok, intcode_program} = File.read("input.txt")
 
 int_array =
