@@ -81,20 +81,13 @@ defmodule Intcode do
   end
 
   defp math_op(int_array, ip, modes, f) do
-    arg1 = get_arg(int_array, ip, 1, modes)
-    arg2 = get_arg(int_array, ip, 2, modes)
-    dest_pos = elem(int_array, ip + 3)
-
+    {arg1, arg2, dest_pos} = get_bin_op_args(int_array, ip, modes)
     put_elem(int_array, dest_pos, f.(arg1, arg2))
   end
 
   defp compare_op(int_array, ip, modes, comp_fn) do
-    arg1 = get_arg(int_array, ip, 1, modes)
-    arg2 = get_arg(int_array, ip, 2, modes)
-    dest_pos = elem(int_array, ip + 3)
-
+    {arg1, arg2, dest_pos} = get_bin_op_args(int_array, ip, modes)
     test_result = if comp_fn.(arg1, arg2), do: 1, else: 0
-
     put_elem(int_array, dest_pos, test_result)
   end
 
@@ -102,12 +95,18 @@ defmodule Intcode do
     test_arg = get_arg(int_array, ip, 1, modes)
     jump_addr_arg = get_arg(int_array, ip, 2, modes)
 
-    next_ip =
-      if test_fn.(test_arg) do
-        jump_addr_arg
-      else
-        ip + 3
-      end
+    if test_fn.(test_arg) do
+      jump_addr_arg
+    else
+      ip + 3
+    end
+  end
+
+  defp get_bin_op_args(int_array, ip, modes) do
+    arg1 = get_arg(int_array, ip, 1, modes)
+    arg2 = get_arg(int_array, ip, 2, modes)
+    dest_pos = elem(int_array, ip + 3)
+    {arg1, arg2, dest_pos}
   end
 
   defp get_arg(int_array, ip, arg_n, modes) do
@@ -120,13 +119,14 @@ defmodule Intcode do
   end
 end
 
-{:ok, intcode_program} = File.read("input.txt")
+{:ok, intcode_str} = File.read("input.txt")
 
-int_array =
-  intcode_program
-  |> String.split(",", trim: true)
-  |> Enum.map(fn s -> elem(Integer.parse(s), 0) end)
+intcode_program =
+  intcode_str
+  |> String.trim()
+  |> String.split(",")
+  |> Enum.map(&String.to_integer/1)
   |> List.to_tuple()
 
-IO.inspect(int_array)
-Intcode.execute(int_array)
+IO.inspect(intcode_program)
+Intcode.execute(intcode_program)
