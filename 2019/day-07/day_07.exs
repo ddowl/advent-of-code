@@ -140,8 +140,8 @@ defmodule Global do
   def permutations(list),
     do: for(elem <- list, rest <- permutations(list -- [elem]), do: [elem | rest])
 
-  def run_amps(program, [a, b, c, d, e]) do
-    [a_res] = Intcode.execute(program, [a, 0])
+  def run_amps_serial(program, [a, b, c, d, e], init_input \\ 0) do
+    [a_res] = Intcode.execute(program, [a, init_input])
     [b_res] = Intcode.execute(program, [b, a_res])
     [c_res] = Intcode.execute(program, [c, b_res])
     [d_res] = Intcode.execute(program, [d, c_res])
@@ -150,7 +150,11 @@ defmodule Global do
   end
 end
 
-{:ok, intcode_str} = File.read("input.txt")
+defmodule Amp do
+  use GenServer
+end
+
+{:ok, intcode_str} = File.read("ex1-part2.txt")
 
 intcode_program =
   intcode_str
@@ -161,13 +165,16 @@ intcode_program =
 
 IO.inspect(intcode_program)
 
-phase_settings = [0, 1, 2, 3, 4]
-phase_setting_permutations = Global.permutations(phase_settings)
+# Part 1
+# serial_phase_settings = [0, 1, 2, 3, 4]
 
-largest_output_signal =
-  phase_settings
-  |> Global.permutations()
-  |> Enum.map(fn settings -> Global.run_amps(intcode_program, settings) end)
-  |> Enum.max()
+# largest_output_signal_serial =
+#   serial_phase_settings
+#   |> Global.permutations()
+#   |> Enum.map(fn settings -> Global.run_amps_serial(intcode_program, settings) end)
+#   |> Enum.max()
 
-IO.inspect(largest_output_signal)
+# IO.inspect(largest_output_signal_serial)
+
+# Part 2
+feedback_phase_settings = [5, 6, 7, 8, 9]
