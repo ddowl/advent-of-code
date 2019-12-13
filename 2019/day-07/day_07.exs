@@ -14,62 +14,52 @@ defmodule Intcode do
   @position_mode 0
   @immediate_mode 1
 
-  def execute(int_array, inputs \\ []) do
-    {halt_state_program, outputs} = execute(int_array, 0, inputs, [])
-    outputs
+  def execute(int_array, get_input, put_output) do
+    execute(int_array, 0, get_input, put_output)
   end
 
-  def execute(int_array, ip, inputs, outputs) do
+  def execute(int_array, ip, get_input, put_output) do
     instr = elem(int_array, ip)
 
     {op, modes} = extract_op_modes(instr)
 
     case op do
       @halt_op ->
-        {int_array, outputs}
+        int_array
 
       @add_op ->
         new_array = math_op(int_array, ip, modes, &+/2)
-        execute(new_array, ip + 4, inputs, outputs)
+        execute(new_array, ip + 4, get_input, put_output)
 
       @mult_op ->
         new_array = math_op(int_array, ip, modes, &*/2)
-        execute(new_array, ip + 4, inputs, outputs)
+        execute(new_array, ip + 4, get_input, put_output)
 
       @read_op ->
         read_pos = elem(int_array, ip + 1)
-
-        {read_val, remaining_inputs} =
-          case inputs do
-            [] ->
-              {IO.gets("Input: ") |> String.trim() |> String.to_integer(), []}
-
-            [x | xs] ->
-              {x, xs}
-          end
-
-        new_array = put_elem(int_array, read_pos, read_val)
-        execute(new_array, ip + 2, remaining_inputs, outputs)
+        new_array = put_elem(int_array, read_pos, get_input.())
+        execute(new_array, ip + 2, get_input, put_output)
 
       @write_op ->
         write_val = get_arg(int_array, ip, 1, modes)
-        execute(int_array, ip + 2, inputs, [write_val | outputs])
+        put_output.(write_val)
+        execute(int_array, ip + 2, get_input, put_output)
 
       @jump_if_true_op ->
         next_ip = jump_test(int_array, ip, modes, fn x -> x != 0 end)
-        execute(int_array, next_ip, inputs, outputs)
+        execute(int_array, next_ip, get_input, put_output)
 
       @jump_if_false_op ->
         next_ip = jump_test(int_array, ip, modes, fn x -> x == 0 end)
-        execute(int_array, next_ip, inputs, outputs)
+        execute(int_array, next_ip, get_input, put_output)
 
       @less_than_op ->
         new_array = compare_op(int_array, ip, modes, &</2)
-        execute(new_array, ip + 4, inputs, outputs)
+        execute(new_array, ip + 4, get_input, put_output)
 
       @equals_op ->
         new_array = compare_op(int_array, ip, modes, &==/2)
-        execute(new_array, ip + 4, inputs, outputs)
+        execute(new_array, ip + 4, get_input, put_output)
 
       x ->
         raise "unknown op: #{x}"
@@ -134,6 +124,34 @@ defmodule Intcode do
   end
 end
 
+defmodule TtyIntcode do
+  def execute(int_array, inputs \\ []) do
+    {:ok, input_agent} = Agent.start_link(fn -> inputs end)
+
+    Intcode.execute(
+      int_array,
+      0,
+      fn ->
+        inputs = Agent.get(input_agent, & &1)
+
+        case inputs do
+          [] ->
+            IO.gets("Input: ") |> String.trim() |> String.to_integer()
+
+          [x | xs] ->
+            Agent.update(input_agent, fn _ -> xs end)
+            x
+        end
+      end,
+      &IO.puts/1
+    )
+  end
+end
+
+defmodule Amp do
+  defstruct send_pids: []
+end
+
 defmodule Global do
   def permutations([]), do: [[]]
 
@@ -150,11 +168,7 @@ defmodule Global do
   end
 end
 
-defmodule Amp do
-  use GenServer
-end
-
-{:ok, intcode_str} = File.read("ex1-part2.txt")
+{:ok, intcode_str} = File.read("ex1-part1.txt")
 
 intcode_program =
   intcode_str
@@ -178,3 +192,5 @@ IO.inspect(intcode_program)
 
 # Part 2
 feedback_phase_settings = [5, 6, 7, 8, 9]
+
+TtyIntcode.execute(intcode_program, [2, 34])
