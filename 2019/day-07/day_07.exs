@@ -127,6 +127,7 @@ end
 defmodule TtyIntcode do
   def execute(int_array, inputs \\ []) do
     {:ok, input_agent} = Agent.start_link(fn -> inputs end)
+    {:ok, output_agent} = Agent.start_link(fn -> [] end)
 
     Intcode.execute(
       int_array,
@@ -143,13 +144,51 @@ defmodule TtyIntcode do
             x
         end
       end,
-      &IO.puts/1
+      fn x ->
+        Agent.update(output_agent, fn xs -> [x | xs] end)
+      end
     )
+
+    Agent.get(output_agent, & &1)
+  end
+end
+
+defmodule ProcessIntcode do
+  def execute(int_array, output_pid) do
+    {:ok, output_agent} = Agent.start_link(fn -> [] end)
+
+    Intcode.execute(
+      int_array,
+      0,
+      fn ->
+        receive do
+          {:input, msg} -> msg
+        end
+      end,
+      fn x ->
+        Agent.update(output_agent, fn outputs -> [x | outputs] end)
+        send(output_pid, {:input, x})
+      end
+    )
+
+    Agent.get(output_agent, & &1)
   end
 end
 
 defmodule Amp do
-  defstruct send_pids: []
+  def execute(int_array, amp_name) do
+    parent = self()
+
+    spawn_link(fn ->
+      pid =
+        receive do
+          {:output_pid, p} -> p
+        end
+
+      outputs = ProcessIntcode.execute(int_array, pid)
+      send(parent, {:amp_halted, amp_name, outputs})
+    end)
+  end
 end
 
 defmodule Global do
@@ -158,17 +197,55 @@ defmodule Global do
   def permutations(list),
     do: for(elem <- list, rest <- permutations(list -- [elem]), do: [elem | rest])
 
+  def max_perm_transform(choices, f) do
+    choices
+    |> Global.permutations()
+    |> Enum.map(f)
+    |> Enum.max()
+  end
+
   def run_amps_serial(program, [a, b, c, d, e], init_input \\ 0) do
-    [a_res] = Intcode.execute(program, [a, init_input])
-    [b_res] = Intcode.execute(program, [b, a_res])
-    [c_res] = Intcode.execute(program, [c, b_res])
-    [d_res] = Intcode.execute(program, [d, c_res])
-    [e_res] = Intcode.execute(program, [e, d_res])
+    [a_res] = TtyIntcode.execute(program, [a, init_input])
+    [b_res] = TtyIntcode.execute(program, [b, a_res])
+    [c_res] = TtyIntcode.execute(program, [c, b_res])
+    [d_res] = TtyIntcode.execute(program, [d, c_res])
+    [e_res] = TtyIntcode.execute(program, [e, d_res])
     e_res
+  end
+
+  def run_amps_feedback(program, [a, b, c, d, e], init_input \\ 0) do
+    # need to instatiate each process, then send output mailbox to each process to start
+    a_pid = Amp.execute(program, :a)
+    b_pid = Amp.execute(program, :b)
+    c_pid = Amp.execute(program, :c)
+    d_pid = Amp.execute(program, :d)
+    e_pid = Amp.execute(program, :e)
+
+    # connect program outputs in a cycle
+    send(a_pid, {:output_pid, b_pid})
+    send(b_pid, {:output_pid, c_pid})
+    send(c_pid, {:output_pid, d_pid})
+    send(d_pid, {:output_pid, e_pid})
+    send(e_pid, {:output_pid, a_pid})
+
+    # supply phase setting as first input
+    send(a_pid, {:input, a})
+    send(b_pid, {:input, b})
+    send(c_pid, {:input, c})
+    send(d_pid, {:input, d})
+    send(e_pid, {:input, e})
+
+    # kick off feedback loop by supplying second input to A
+    send(a_pid, {:input, init_input})
+
+    # last output signal from E is sent to thrusters
+    receive do
+      {:amp_halted, :e, [last_output | xs]} -> last_output
+    end
   end
 end
 
-{:ok, intcode_str} = File.read("ex1-part1.txt")
+{:ok, intcode_str} = File.read("input.txt")
 
 intcode_program =
   intcode_str
@@ -180,17 +257,21 @@ intcode_program =
 IO.inspect(intcode_program)
 
 # Part 1
-# serial_phase_settings = [0, 1, 2, 3, 4]
+serial_phase_settings = [0, 1, 2, 3, 4]
 
-# largest_output_signal_serial =
-#   serial_phase_settings
-#   |> Global.permutations()
-#   |> Enum.map(fn settings -> Global.run_amps_serial(intcode_program, settings) end)
-#   |> Enum.max()
+largest_output_signal_serial =
+  Global.max_perm_transform(serial_phase_settings, fn settings ->
+    Global.run_amps_serial(intcode_program, settings)
+  end)
 
-# IO.inspect(largest_output_signal_serial)
+IO.inspect(largest_output_signal_serial)
 
 # Part 2
 feedback_phase_settings = [5, 6, 7, 8, 9]
 
-TtyIntcode.execute(intcode_program, [2, 34])
+largest_output_signal_feedback =
+  Global.max_perm_transform(feedback_phase_settings, fn settings ->
+    Global.run_amps_feedback(intcode_program, settings)
+  end)
+
+IO.inspect(largest_output_signal_feedback)
