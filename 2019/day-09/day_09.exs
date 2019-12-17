@@ -38,8 +38,6 @@ defmodule Intcode do
       curr_size = tuple_size(m)
 
       if(curr_size <= new_size) do
-        IO.inspect("Expanding!")
-        IO.inspect({curr_size, new_size})
         diff_size = new_size - curr_size + 1
         padded_zeros = List.duplicate(0, diff_size)
 
@@ -67,7 +65,7 @@ defmodule Intcode do
     state = %{state | memory: m}
 
     {op, modes} = extract_op_modes(instr)
-    IO.inspect({op, modes})
+    # IO.inspect({op, modes, state})
 
     case op do
       @halt_op ->
@@ -82,12 +80,9 @@ defmodule Intcode do
         execute(%{state | memory: m, ip: state.ip + 4}, io)
 
       @read_op ->
-        IO.inspect("Read op")
-        # {m, read_pos} = Memory.get(state.memory, state.ip + 1)
-        {m, read_pos} = get_arg(state, 1, modes)
+        {m, read_pos} = get_arg_pos(state, 1, modes)
         input = io.get_input.()
         m = Memory.set(m, read_pos, input)
-        IO.inspect({read_pos, input})
         execute(%{state | memory: m, ip: state.ip + 2}, io)
 
       @write_op ->
@@ -115,9 +110,6 @@ defmodule Intcode do
         {m, base_offset} = get_arg(state, 1, modes)
         new_relative_base = state.relative_base + base_offset
 
-        IO.inspect("Relative base change")
-        IO.inspect(new_relative_base)
-
         execute(
           %{state | memory: m, ip: state.ip + 2, relative_base: new_relative_base},
           io
@@ -135,16 +127,12 @@ defmodule Intcode do
   defp math_op(state, modes, f) do
     {arg1, arg2, dest_pos, int_array} = get_bin_op_args(state, modes)
 
-    m = Memory.set(int_array, dest_pos, f.(arg1, arg2))
-    IO.inspect(elem(m, dest_pos))
-    m
+    Memory.set(int_array, dest_pos, f.(arg1, arg2))
   end
 
   defp compare_op(state, modes, comp_fn) do
     {arg1, arg2, dest_pos, int_array} = get_bin_op_args(state, modes)
 
-    IO.inspect("Compare Op")
-    IO.inspect({arg1, arg2})
     test_result = if comp_fn.(arg1, arg2), do: 1, else: 0
     Memory.set(int_array, dest_pos, test_result)
   end
@@ -152,9 +140,6 @@ defmodule Intcode do
   defp jump_test(state, modes, test_fn) do
     {m, test_arg} = get_arg(state, 1, modes)
     {m, jump_addr_arg} = get_arg(%{state | memory: m}, 2, modes)
-
-    IO.inspect("Jump Test")
-    IO.inspect({test_arg, jump_addr_arg})
 
     next_ip =
       if test_fn.(test_arg) do
@@ -169,25 +154,28 @@ defmodule Intcode do
   defp get_bin_op_args(state, modes) do
     {m, arg1} = get_arg(state, 1, modes)
     {m, arg2} = get_arg(%{state | memory: m}, 2, modes)
-    {m, dest_pos} = Memory.get(m, state.ip + 3)
+    {m, dest_pos} = get_arg_pos(%{state | memory: m}, 3, modes)
     {arg1, arg2, dest_pos, m}
   end
 
-  defp get_arg(%State{memory: m, ip: ip, relative_base: rb}, arg_n, modes) do
-    {m, idx} =
-      case Map.get(modes, arg_n, 0) do
-        @position_mode ->
-          Memory.get(m, ip + arg_n)
-
-        @immediate_mode ->
-          {m, ip + arg_n}
-
-        @relative_mode ->
-          {m, p} = Memory.get(m, ip + arg_n)
-          {m, p + rb}
-      end
-
+  defp get_arg(state, arg_n, modes) do
+    {m, idx} = get_arg_pos(state, arg_n, modes)
     Memory.get(m, idx)
+  end
+
+  defp get_arg_pos(%State{memory: m, ip: ip, relative_base: rb}, arg_n, modes) do
+    case Map.get(modes, arg_n, 0) do
+      @position_mode ->
+        Memory.get(m, ip + arg_n)
+
+      # Parameters that an instruction writes to will _never be in immediate mode_
+      @immediate_mode ->
+        {m, ip + arg_n}
+
+      @relative_mode ->
+        {m, p} = Memory.get(m, ip + arg_n)
+        {m, p + rb}
+    end
   end
 
   defp extract_op_modes(instr) do
