@@ -259,3 +259,6 @@ IO.inspect(intcode_program)
 
 # Part 1
 IO.inspect(TtyIntcode.execute(intcode_program, [1]) |> Enum.reverse())
+
+# Part 2
+IO.inspect(TtyIntcode.execute(intcode_program, [2]) |> Enum.reverse())
