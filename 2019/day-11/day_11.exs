@@ -40,15 +40,11 @@ defmodule Robot do
   end
 end
 
-defmodule Grid do
-  defstruct tiles: %{}
-end
-
 defmodule Painter do
-  def init(painter_program) do
+  def init(painter_program, panels) do
     parent = self()
     painter_pid = spawn_link(fn -> ProcessIntcode.execute(painter_program, parent) end)
-    execute(%Robot{}, %{}, painter_pid)
+    execute(%Robot{}, panels, painter_pid)
   end
 
   def execute(robot, panels, painter_pid) do
@@ -75,13 +71,39 @@ defmodule Painter do
       end
 
     if is_nil(next_color) && is_nil(next_dir) do
-      {robot, panels}
+      panels
     else
       next_panels = Map.put(panels, robot.position, next_color)
       next_robot = robot |> Robot.update_direction(next_dir) |> Robot.move()
 
       execute(next_robot, next_panels, painter_pid)
     end
+  end
+
+  # Matrix of chars, '.' is a black panel, '#' is a white panel
+  def hull_ascii(panels) do
+    panel_positions = Map.keys(panels)
+    xs = Enum.map(panel_positions, fn {x, _} -> x end)
+    ys = Enum.map(panel_positions, fn {_, y} -> y end)
+    max_x = Enum.max(xs)
+    min_x = Enum.min(xs)
+    max_y = Enum.max(ys)
+    min_y = Enum.min(ys)
+
+    max_y..min_y
+    |> Enum.map(fn y ->
+      min_x..max_x
+      |> Enum.map(fn x ->
+        color_code = Map.get(panels, {x, y}, 0)
+
+        case color_code do
+          0 -> '.'
+          1 -> '#'
+        end
+      end)
+      |> Enum.join(" ")
+    end)
+    |> Enum.join("\n")
   end
 end
 
@@ -95,7 +117,12 @@ painter_program =
   |> List.to_tuple()
 
 # Part 1
-{robot, panels} = Painter.init(painter_program)
+panels = Painter.init(painter_program, %{})
 
 num_panels_painted = panels |> Map.keys() |> Enum.count()
 IO.inspect(num_panels_painted)
+
+# Part 2
+panels = Painter.init(painter_program, %{{0, 0} => 1})
+ascii = Painter.hull_ascii(panels)
+IO.puts(ascii)
