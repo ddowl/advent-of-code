@@ -30,13 +30,12 @@ defmodule Asteroids do
     :math.atan2(dy, dx) * (180 / :math.pi())
   end
 
-  def detectable(station, candidates) do
-    candidates
+  def detectable(station, asteroids) do
+    asteroids
     |> MapSet.to_list()
     |> Enum.sort_by(fn a -> manhattan_distance(station, a) end)
     |> List.foldl({[], MapSet.new()}, fn asteroid, {acc, seen_angles} ->
       s = angle(station, asteroid)
-      # IO.inspect({asteroid, s, seen_angles})
 
       if MapSet.member?(seen_angles, s) do
         {acc, seen_angles}
@@ -46,9 +45,16 @@ defmodule Asteroids do
     end)
     |> elem(0)
   end
+
+  def relative_angles(station, asteroids) do
+    asteroids
+    |> MapSet.to_list()
+    |> Enum.sort_by(fn a -> manhattan_distance(station, a) end)
+    |> List.foldl(%{}, fn asteroid, acc -> Map.put(acc, asteroid, angle(station, asteroid)) end)
+  end
 end
 
-{:ok, contents} = File.read("input.txt")
+{:ok, contents} = File.read("ex5.txt")
 
 asteroids =
   contents
@@ -69,7 +75,8 @@ asteroids =
 
 # IO.inspect(asteroids)
 
-best_station =
+# Part 1
+{best_station, detectable_asteroids} =
   asteroids
   |> Enum.map(fn a ->
     other_asteroids = MapSet.delete(asteroids, a)
@@ -78,5 +85,10 @@ best_station =
   end)
   |> Enum.max_by(fn {_, n} -> n end)
 
-IO.inspect(best_station)
-# IO.inspect(Asteroids.detectable({5, 8}, MapSet.delete(asteroids, {5, 8})) |> Enum.count())
+IO.inspect(detectable_asteroids)
+
+# Part 2
+# Need to rotate from -90 to 0, 0 to 180, -180 to -90 for full rotation
+other_asteroids = MapSet.delete(asteroids, best_station)
+# Asteroids.detectable(best_station, other_asteroids)
+# IO.inspect(Asteroids.relative_angles(best_station, other_asteroids))
