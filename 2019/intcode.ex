@@ -235,7 +235,7 @@ defmodule ProcessIntcode do
       end,
       fn x ->
         Agent.update(output_agent, fn outputs -> [x | outputs] end)
-        send(output_pid, {:input, x})
+        send(output_pid, {:output, x})
       end
     )
 
