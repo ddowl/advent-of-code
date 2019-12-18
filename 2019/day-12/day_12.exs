@@ -6,7 +6,6 @@ defmodule MoonSim do
   end
 
   def num_steps_till_repeat(moons, seen_states, curr_step) do
-    IO.inspect(curr_step)
     # hash = :crypto.hash(:md5, moons)
 
     if MapSet.member?(seen_states, moons) do
@@ -88,7 +87,14 @@ defmodule MoonSim do
   end
 end
 
-{:ok, contents} = File.read("ex2.txt")
+defmodule Math do
+  def gcd(a, 0), do: abs(a)
+  def gcd(a, b), do: gcd(b, rem(a, b))
+
+  def lcm(a, b), do: div(abs(a * b), gcd(a, b))
+end
+
+{:ok, contents} = File.read("input.txt")
 
 moons =
   contents
@@ -106,10 +112,23 @@ moons =
     {position, [0, 0, 0]}
   end)
 
+IO.inspect(moons)
+
 # Part 1
-IO.inspect(MoonSim.simulate(moons, 1000))
 IO.inspect(moons |> MoonSim.simulate(1000) |> MoonSim.energy())
 
 # Part 2
-n = MoonSim.num_steps_till_repeat(moons)
-IO.inspect(n)
+# Brute force method with total moon state is far too slow
+# IO.inspect(MoonSim.num_steps_till_repeat(moons))
+
+# Instead, let's figure out how long it takes for each axis to repeat independently (since they aren't dependent on each other)
+moons_x = moons |> Enum.map(fn {[px, _, _], [vx, _, _]} -> {[px], [vx]} end)
+moons_y = moons |> Enum.map(fn {[_, py, _], [_, vy, _]} -> {[py], [vy]} end)
+moons_z = moons |> Enum.map(fn {[_, _, pz], [_, _, vz]} -> {[pz], [vz]} end)
+
+period_x = MoonSim.num_steps_till_repeat(moons_x)
+period_y = MoonSim.num_steps_till_repeat(moons_y)
+period_z = MoonSim.num_steps_till_repeat(moons_z)
+
+total_period = period_x |> Math.lcm(period_y) |> Math.lcm(period_z)
+IO.inspect(total_period)
