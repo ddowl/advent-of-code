@@ -1,13 +1,20 @@
-defmodule Simulation do
+defmodule MoonSim do
+  def simulate(moons, 0), do: moons
+
+  def simulate(moons, n) do
+    moons
+    |> tick()
+    |> simulate(n - 1)
+  end
+
   def tick(moons) do
     # First, update velocity w/ gravity
-    updated_vel = gravity(moons)
-
     # Then, update positions w/ velocity
+    moons |> apply_gravity() |> apply_velocity()
   end
 
   # Updates moons' velocities based on their positions wrt each other
-  def gravity(moons) do
+  def apply_gravity(moons) do
     Enum.map(moons, fn {pos, vel} ->
       other_moon_positions =
         moons
@@ -17,15 +24,39 @@ defmodule Simulation do
       new_vel =
         List.foldl(other_moon_positions, vel, fn p, acc_vel ->
           vel_diff = p |> vector_diff(pos) |> Enum.map(&gravity_effect/1)
-          List.zip([acc_vel, vel_diff]) |> Enum.map(fn {a, b} -> a + b end)
+          vector_sum(acc_vel, vel_diff)
         end)
 
       {pos, new_vel}
     end)
   end
 
-  defp vector_diff([x1, y1, z1], [x2, y2, z2]) do
-    [x1 - x2, y1 - y2, z1 - z2]
+  def apply_velocity(moons) do
+    Enum.map(moons, fn {pos, vel} -> {vector_sum(pos, vel), vel} end)
+  end
+
+  def energy(moons) do
+    moons
+    |> Enum.map(fn moon -> potential_energy(moon) * kinetic_energy(moon) end)
+    |> Enum.sum()
+  end
+
+  def potential_energy({pos, _}), do: abs_sum(pos)
+
+  def kinetic_energy({_, vel}), do: abs_sum(vel)
+
+  defp abs_sum(v), do: v |> Enum.map(&abs/1) |> Enum.sum()
+
+  defp vector_sum(a, b) do
+    vector_op(a, b, fn a, b -> a + b end)
+  end
+
+  defp vector_diff(a, b) do
+    vector_op(a, b, fn a, b -> a - b end)
+  end
+
+  defp vector_op(vec_a, vec_b, f) do
+    List.zip([vec_a, vec_b]) |> Enum.map(fn {a, b} -> f.(a, b) end)
   end
 
   defp gravity_effect(delta) do
@@ -37,7 +68,7 @@ defmodule Simulation do
   end
 end
 
-{:ok, contents} = File.read("ex1.txt")
+{:ok, contents} = File.read("input.txt")
 
 moons =
   contents
@@ -56,4 +87,5 @@ moons =
   end)
 
 IO.inspect(moons)
-IO.inspect(Simulation.gravity(moons))
+IO.inspect(MoonSim.simulate(moons, 1000))
+IO.inspect(moons |> MoonSim.simulate(1000) |> MoonSim.energy())
