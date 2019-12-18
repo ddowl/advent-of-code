@@ -1,4 +1,24 @@
 defmodule MoonSim do
+  def num_steps_till_repeat(moons) do
+    # store previous states as hashes in a MapSet
+    seen_states = MapSet.new()
+    num_steps_till_repeat(moons, seen_states, 0)
+  end
+
+  def num_steps_till_repeat(moons, seen_states, curr_step) do
+    IO.inspect(curr_step)
+    # hash = :crypto.hash(:md5, moons)
+
+    if MapSet.member?(seen_states, moons) do
+      curr_step
+    else
+      next_moons = tick(moons)
+      next_seen = MapSet.put(seen_states, moons)
+      next_step = curr_step + 1
+      num_steps_till_repeat(next_moons, next_seen, next_step)
+    end
+  end
+
   def simulate(moons, 0), do: moons
 
   def simulate(moons, n) do
@@ -68,7 +88,7 @@ defmodule MoonSim do
   end
 end
 
-{:ok, contents} = File.read("input.txt")
+{:ok, contents} = File.read("ex2.txt")
 
 moons =
   contents
@@ -86,6 +106,10 @@ moons =
     {position, [0, 0, 0]}
   end)
 
-IO.inspect(moons)
+# Part 1
 IO.inspect(MoonSim.simulate(moons, 1000))
 IO.inspect(moons |> MoonSim.simulate(1000) |> MoonSim.energy())
+
+# Part 2
+n = MoonSim.num_steps_till_repeat(moons)
+IO.inspect(n)
