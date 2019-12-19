@@ -21,7 +21,7 @@ defmodule Nanofactory do
       # been broken down into consituents
       num_required_composite = Map.get(products, next_composite)
       {yield, reactants} = Map.get(reactions, next_composite)
-      reruns = num_required_reactions(num_required_composite, yield)
+      reruns = trunc(Float.ceil(num_required_composite / yield))
 
       total_composite_yield = yield * reruns
       leftover_composite = total_composite_yield - num_required_composite
@@ -36,22 +36,6 @@ defmodule Nanofactory do
       required_compounds(next_products, reactions)
     end
   end
-
-  # TODO: simpler way to specify # of required reactions?
-  defp num_required_reactions(n, yield) do
-    num_required_reactions(n, yield, yield, 1)
-  end
-
-  defp num_required_reactions(n, acc, step, count) do
-    if acc >= n do
-      count
-    else
-      num_required_reactions(n, acc + step, step, count + 1)
-    end
-  end
-
-  defp only_ore([{"ORE", _}]), do: true
-  defp only_ore(_), do: false
 end
 
 # Community inputs
