@@ -1,36 +1,39 @@
 defmodule Nanofactory do
-  def required_ore("ORE", n, _), do: n
-
   def required_ore(product, n, reactions) do
-    compounds = required_compounds(product, n, reactions)
-
-    compounds
-    |> Enum.map(fn {c, m} ->
-      {yield, [{"ORE", o}]} = Map.get(reactions, c)
-      reruns = num_required_reactions(m, yield)
-      reruns * o
-    end)
-    |> Enum.sum()
+    required_compounds(%{product => n}, reactions)
+    |> Enum.find(fn {x, _} -> x == "ORE" end)
+    |> elem(1)
   end
 
-  # Aggregate all required non-ORE
-  def required_compounds("ORE", _, _), do: raise("Cannot call 'ORE' on required_compounds")
+  def required_compounds(products, reactions) do
+    next_composite =
+      products
+      |> Map.keys()
+      |> Enum.find(fn p ->
+        num_required = Map.get(products, p)
+        p != "ORE" && num_required > 0
+      end)
 
-  def required_compounds(product, n, reactions) do
-    # If product requires only ORE, we're done
-    {yield, reactants} = Map.get(reactions, product)
-
-    if only_ore(reactants) do
-      [{product, n}]
+    if is_nil(next_composite) do
+      products
     else
-      reruns = num_required_reactions(n, yield)
+      # update products with 1 substitution at a time, until all products have
+      # been broken down into consituents
+      num_required_composite = Map.get(products, next_composite)
+      {yield, reactants} = Map.get(reactions, next_composite)
+      reruns = num_required_reactions(num_required_composite, yield)
 
-      base_compounds =
-        reactants
-        |> Enum.map(fn {r, m} -> required_compounds(r, m * reruns, reactions) end)
-        |> List.flatten()
-        |> Enum.group_by(fn {r, _} -> r end, fn {_, m} -> m end)
-        |> Enum.map(fn {r, ms} -> {r, Enum.sum(ms)} end)
+      total_composite_yield = yield * reruns
+      leftover_composite = total_composite_yield - num_required_composite
+      removed_composites = Map.put(products, next_composite, -leftover_composite)
+
+      next_products =
+        List.foldl(reactants, removed_composites, fn {r, n}, acc ->
+          prev_n = Map.get(acc, r, 0)
+          Map.put(acc, r, prev_n + reruns * n)
+        end)
+
+      required_compounds(next_products, reactions)
     end
   end
 
@@ -51,7 +54,9 @@ defmodule Nanofactory do
   defp only_ore(_), do: false
 end
 
-{:ok, contents} = File.read("ex6.txt")
+# Community inputs
+# ex6 requires 20 ORE
+{:ok, contents} = File.read("input.txt")
 
 reactions =
   contents
@@ -79,9 +84,4 @@ reactions =
 IO.inspect(reactions)
 
 # Part 1
-# IO.inspect(Nanofactory.required_ore("FUEL", 1, reactions))
 IO.inspect(Nanofactory.required_ore("FUEL", 1, reactions))
-IO.inspect(Nanofactory.required_compounds("FUEL", 1, reactions))
-# IO.inspect(Nanofactory.required_compounds("AB", 2, reactions))
-# IO.inspect(Nanofactory.required_compounds("BC", 3, reactions))
-# IO.inspect(Nanofactory.required_compounds("CA", 4, reactions))
