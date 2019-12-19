@@ -27,6 +27,10 @@ defmodule Arcade do
 end
 
 defmodule BrickBreaker do
+  defmodule State do
+    defstruct tiles: %{}, ball_pos: nil, paddle_pos: nil, score: 0
+  end
+
   def init(program) do
     # 3 child processes
     # BB program spun up in child process,
@@ -35,7 +39,7 @@ defmodule BrickBreaker do
     # parent process (self) moves output from BB to agent
     parent = self()
     arcade_pid = spawn_link(fn -> ProcessIntcode.execute(program, parent) end)
-    {:ok, agent_pid} = Agent.start_link(fn -> {%{}, 0} end)
+    {:ok, agent_pid} = Agent.start_link(fn -> %State{} end)
     event_loop_pid = spawn_link(fn -> event_loop(arcade_pid, agent_pid) end)
     state_proxy(agent_pid)
   end
@@ -67,10 +71,19 @@ defmodule BrickBreaker do
     else
       case {x, y, tile_id} do
         {-1, 0, score} ->
-          Agent.update(agent_pid, fn {tiles, _} -> {tiles, score} end)
+          Agent.update(agent_pid, fn state -> %{state | score: score} end)
 
         {x, y, tid} ->
-          Agent.update(agent_pid, fn {tiles, score} -> {Map.put(tiles, {x, y}, tid), score} end)
+          Agent.update(agent_pid, fn state ->
+            pos = {x, y}
+            new_tiles = Map.put(state.tiles, pos, tid)
+
+            case tid do
+              4 -> %{state | tiles: new_tiles, ball_pos: pos}
+              3 -> %{state | tiles: new_tiles, paddle_pos: pos}
+              _ -> %{state | tiles: new_tiles}
+            end
+          end)
       end
 
       state_proxy(agent_pid)
@@ -78,16 +91,27 @@ defmodule BrickBreaker do
   end
 
   def event_loop(arcade_pid, agent_pid) do
-    {tiles, score} = Agent.get(agent_pid, fn s -> s end)
+    state = Agent.get(agent_pid, fn s -> s end)
     IO.write("\n")
-    IO.puts(score)
-    IO.puts(Arcade.screen(tiles))
+    IO.puts(state.score)
+    IO.puts(Arcade.screen(state.tiles))
 
-    # TODO: capture keyboard events or adjust paddle under ball programmatically
-    send(arcade_pid, {:input, 1})
-    Process.sleep(300)
+    send(arcade_pid, {:input, joystick_input(state.ball_pos, state.paddle_pos)})
+    Process.sleep(10)
     event_loop(arcade_pid, agent_pid)
   end
+
+  defp joystick_input({ball_x, _}, {paddle_x, _}) do
+    d = ball_x - paddle_x
+
+    cond do
+      d > 0 -> 1
+      d == 0 -> 0
+      d < 0 -> -1
+    end
+  end
+
+  defp joystick_input(_, _), do: 0
 end
 
 {:ok, intcode_str} = File.read("input.txt")
