@@ -2,7 +2,11 @@ Code.require_file("../intcode.ex")
 
 defmodule Droid do
   defmodule State do
-    defstruct walls: MapSet.new(), floors: MapSet.new([{0, 0}]), pos: {0, 0}
+    defstruct walls: MapSet.new(),
+              floors: MapSet.new([{0, 0}]),
+              pos: {0, 0},
+              oxygen_tank_pos: nil,
+              oxygen_tank_path_len: nil
   end
 
   def init(program) do
@@ -11,88 +15,94 @@ defmodule Droid do
     droid_pid = spawn_link(fn -> ProcessIntcode.execute(program, parent) end)
 
     explorer_pid =
-      spawn_link(fn -> explore_ship(parent, initial_state.pos, nil, MapSet.new()) end)
+      spawn_link(fn ->
+        explore_ship(parent, initial_state.pos, nil, MapSet.new(), 0)
+        send(parent, :finished)
+      end)
 
     loop(droid_pid, explorer_pid, initial_state)
   end
 
   def loop(droid_pid, explorer_pid, state) do
-    input_dir =
-      receive do
-        {:command, direction} -> direction
-      end
+    receive do
+      :finished ->
+        state
 
-    send(droid_pid, {:input, input_dir})
+      {:command, input_dir, steps_from_origin} ->
+        send(droid_pid, {:input, input_dir})
 
-    status =
-      receive do
-        {:output, msg} -> msg
-      after
-        1000 -> nil
-      end
+        status =
+          receive do
+            {:output, msg} -> msg
+          after
+            1000 -> nil
+          end
 
-    if is_nil(status) do
-      raise "Droid timeout: waiting for response"
-    end
-
-    next_pos = move_in_dir(state.pos, input_dir)
-
-    send(explorer_pid, {:command, status})
-
-    if status == 2 do
-      IO.inspect("Found oxygen tank!!!")
-      next_droid_forward(state, state.pos, next_pos)
-    else
-      new_state =
-        case status do
-          0 -> hit_wall(state, next_pos)
-          1 -> next_droid_forward(state, state.pos, next_pos)
+        if is_nil(status) do
+          raise "Droid timeout: waiting for response"
         end
 
-      IO.puts(known_floorplan(new_state))
-      IO.write("\n")
+        next_pos = move_in_dir(state.pos, input_dir)
+        send(explorer_pid, {:command, status})
 
-      Process.sleep(10)
-      loop(droid_pid, explorer_pid, new_state)
+        new_state =
+          case status do
+            0 ->
+              hit_wall(state, next_pos)
+
+            1 ->
+              next_droid_forward(state, state.pos, next_pos)
+
+            2 ->
+              state
+              |> next_droid_forward(state.pos, next_pos)
+              |> found_oxygen_tank(next_pos, steps_from_origin)
+          end
+
+        # IO.puts(known_floorplan(new_state))
+        # IO.write("\n")
+
+        # Process.sleep(10)
+        loop(droid_pid, explorer_pid, new_state)
     end
   end
 
-  def explore_ship(command_pid, pos, dir, seen) do
+  def explore_ship(command_pid, pos, dir, seen, steps_from_origin) do
     seen = MapSet.put(seen, pos)
-    adjacent_positions = find_adjacent_positions(command_pid, pos)
+    adjacent_positions = find_adjacent_positions(command_pid, pos, steps_from_origin)
 
     seen =
       List.foldl(adjacent_positions, seen, fn {p, d}, acc ->
         if !MapSet.member?(acc, p) do
-          command_droid(command_pid, d)
-          explore_ship(command_pid, p, d, acc)
+          command_droid(command_pid, d, steps_from_origin)
+          explore_ship(command_pid, p, d, acc, steps_from_origin + 1)
         else
           seen
         end
       end)
 
     if !is_nil(dir) do
-      command_droid(command_pid, opposite_direction(dir))
+      command_droid(command_pid, opposite_direction(dir), steps_from_origin)
     end
 
     seen
   end
 
-  defp find_adjacent_positions(command_pid, pos) do
+  defp find_adjacent_positions(command_pid, pos, steps_from_origin) do
     # try all directions! only use those that are not walls
     # not a fan of tracking positions in explorer and command
 
     [1, 2, 3, 4]
     |> Enum.map(fn dir -> {move_in_dir(pos, dir), dir} end)
     |> Enum.filter(fn {p, dir} ->
-      status = command_droid(command_pid, dir)
+      status = command_droid(command_pid, dir, steps_from_origin)
 
       is_wall = status == 0
 
       if !is_wall do
-        retreat_status = command_droid(command_pid, opposite_direction(dir))
+        retreat_status = command_droid(command_pid, opposite_direction(dir), steps_from_origin)
 
-        if retreat_status != 1 do
+        if retreat_status == 0 do
           raise "Can't move back to open floor???"
         end
       end
@@ -101,8 +111,8 @@ defmodule Droid do
     end)
   end
 
-  defp command_droid(command_pid, dir) do
-    send(command_pid, {:command, dir})
+  defp command_droid(command_pid, dir, steps_from_origin) do
+    send(command_pid, {:command, dir, steps_from_origin})
 
     receive do
       {:command, msg} -> msg
@@ -114,6 +124,9 @@ defmodule Droid do
   defp next_droid_forward(state, prev_pos, curr_pos),
     do: %{state | floors: MapSet.put(state.floors, prev_pos), pos: curr_pos}
 
+  defp found_oxygen_tank(state, pos, steps),
+    do: %{state | oxygen_tank_pos: pos, oxygen_tank_path_len: steps}
+
   defp move_in_dir({x, y}, 1), do: {x, y + 1}
   defp move_in_dir({x, y}, 2), do: {x, y - 1}
   defp move_in_dir({x, y}, 3), do: {x - 1, y}
@@ -124,7 +137,7 @@ defmodule Droid do
   defp opposite_direction(3), do: 4
   defp opposite_direction(4), do: 3
 
-  defp known_floorplan(%State{walls: walls, floors: floors, pos: pos}) do
+  defp known_floorplan(%State{walls: walls, floors: floors, pos: pos, oxygen_tank_pos: otp}) do
     known_positions = MapSet.union(walls, MapSet.put(floors, pos))
 
     xs = Enum.map(known_positions, fn {x, _} -> x end)
@@ -141,6 +154,7 @@ defmodule Droid do
 
         cond do
           p == pos -> "D"
+          p == otp -> "O"
           MapSet.member?(floors, p) -> "."
           MapSet.member?(walls, p) -> "#"
           true -> " "
@@ -164,4 +178,6 @@ droid_program =
 IO.inspect(droid_program)
 
 # Part 1
-IO.inspect(Droid.init(droid_program))
+ship_floorplan = Droid.init(droid_program)
+IO.inspect(ship_floorplan)
+IO.inspect(ship_floorplan.oxygen_tank_path_len)
