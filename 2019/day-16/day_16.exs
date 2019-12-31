@@ -1,6 +1,6 @@
-defmodule FlawedFrequencyTransmission do
-  def phases(digit_list, 0), do: digit_list
-  def phases(digit_list, n), do: phases(phase(digit_list), n - 1)
+defmodule FFT do
+  def apply(digit_list, _, 0), do: digit_list
+  def apply(digit_list, f, n), do: FFT.apply(f.(digit_list), f, n - 1)
 
   def phase(digit_list) do
     num_digits = length(digit_list)
@@ -25,8 +25,12 @@ defmodule FlawedFrequencyTransmission do
     |> Stream.drop(1)
   end
 
-  def fast_phases(digit_list, 0), do: digit_list
-  def fast_phases(digit_list, n), do: fast_phases(fast_phase(digit_list), n - 1)
+  def fast_phases(digit_list, n) do
+    digit_list
+    |> Enum.reverse()
+    |> FFT.apply(fn l -> Enum.scan(l, 0, fn d, acc -> rem(d + acc, 10) end) end, n)
+    |> Enum.reverse()
+  end
 
   # If we're operating on the end of a signal, we're able to use a heuristic that
   # only applies to the end of the last digits of the matrix transformation:
@@ -50,7 +54,9 @@ digit_list =
   |> String.graphemes()
   |> Enum.map(&String.to_integer/1)
 
-# IO.inspect(FlawedFrequencyTransmission.phases(digit_list, 100) |> Enum.join())
+phased_signal = digit_list |> FFT.apply(&FFT.phase/1, 100)
+first_digits = Enum.take(phased_signal, 8) |> Enum.join() |> String.to_integer()
+IO.inspect(first_digits)
 
 # Part 2
 # Since the 8-digit message offset is so deep into the signal, we're able to use a heuristic that
@@ -59,6 +65,6 @@ digit_list =
 message_offset = Enum.take(digit_list, 7) |> Enum.join() |> String.to_integer()
 real_signal = digit_list |> List.duplicate(10000) |> List.flatten()
 real_signal_end_chunk = Enum.drop(real_signal, message_offset)
-phased_chunk = FlawedFrequencyTransmission.fast_phases(real_signal_end_chunk, 100)
-embedded_message = Enum.take(phased_chunk, 8) |> Enum.join() |> String.to_integer()
+phased_signal_chunk = FFT.fast_phases(real_signal_end_chunk, 100)
+embedded_message = Enum.take(phased_signal_chunk, 8) |> Enum.join() |> String.to_integer()
 IO.inspect(embedded_message)
