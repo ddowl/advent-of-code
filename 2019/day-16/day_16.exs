@@ -24,6 +24,21 @@ defmodule FlawedFrequencyTransmission do
     end)
     |> Stream.drop(1)
   end
+
+  def fast_phases(digit_list, 0), do: digit_list
+  def fast_phases(digit_list, n), do: fast_phases(fast_phase(digit_list), n - 1)
+
+  # If we're operating on the end of a signal, we're able to use a heuristic that
+  # only applies to the end of the last digits of the matrix transformation:
+  # The last digit of phase(n) is n, the second-to-last digit is the last digit plus the old second to-last digit, and so on.
+  def fast_phase(digit_list) do
+    # no `scanr`, so we have to reverse the list
+
+    digit_list
+    |> Enum.reverse()
+    |> Enum.scan(0, fn d, acc -> rem(d + acc, 10) end)
+    |> Enum.reverse()
+  end
 end
 
 {:ok, signal} = File.read("input.txt")
@@ -35,4 +50,15 @@ digit_list =
   |> String.graphemes()
   |> Enum.map(&String.to_integer/1)
 
-IO.inspect(FlawedFrequencyTransmission.phases(digit_list, 100) |> Enum.join())
+# IO.inspect(FlawedFrequencyTransmission.phases(digit_list, 100) |> Enum.join())
+
+# Part 2
+# Since the 8-digit message offset is so deep into the signal, we're able to use a heuristic that
+# only applies to the end of the last digits of the matrix transformation:
+# The last digit of phase(n) is n, the second-to-last digit is the last digit plus the old second to-last digit, and so on.
+message_offset = Enum.take(digit_list, 7) |> Enum.join() |> String.to_integer()
+real_signal = digit_list |> List.duplicate(10000) |> List.flatten()
+real_signal_end_chunk = Enum.drop(real_signal, message_offset)
+phased_chunk = FlawedFrequencyTransmission.fast_phases(real_signal_end_chunk, 100)
+embedded_message = Enum.take(phased_chunk, 8) |> Enum.join() |> String.to_integer()
+IO.inspect(embedded_message)
