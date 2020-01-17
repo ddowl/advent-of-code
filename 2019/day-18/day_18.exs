@@ -45,26 +45,95 @@ end
 
 # Main module needed to use structs defined in same .exs file
 defmodule Main do
+  # # Use BFS to find the shortest path:
+  # # Pop state from queue
+  # # Figure out all of the keys you can reach from your state.
+  # # Push states into queue in sorted order of distance
+  # # Return first solution
+  # def min_distance_to_collect_all_keys(queue) do
+  #   {{:value, {dungeon, dist, path}}, queue} = :queue.out(queue)
+
+  #   IO.inspect(Enum.join(path))
+  #   adj_keys = Dungeon.Crawler.reachable_keys(dungeon)
+
+  #   case adj_keys do
+  #     [] ->
+  #       dist
+
+  #     adj_keys ->
+  #       sorted_states =
+  #         adj_keys
+  #         |> Enum.map(fn {key, _, d, new_dungeon} -> {new_dungeon, dist + d, path ++ [key]} end)
+  #         |> Enum.sort_by(fn {_, d, _} -> d end)
+
+  #       new_queue = Enum.reduce(sorted_states, queue, fn val, q -> :queue.in(val, q) end)
+  #       min_distance_to_collect_all_keys(new_queue)
+  #   end
+  # end
+
   def min_distance_to_collect_all_keys(dungeon) do
-    # Figure out all of the keys you can reach from your current position.
-    # Try collecting them in different orders, summing the total distance traveled.
-    # Return the end state that has the largest distance traveled
-    min_distance_to_collect_all_keys(dungeon, 0)
+    min_dists_to_all_key_paths(dungeon, 0, 0, MapSet.new(Map.values(dungeon.keys)), %{})
+    |> Map.get(MapSet.new())
   end
 
-  defp min_distance_to_collect_all_keys(dungeon, curr_distance) do
-    case Dungeon.Crawler.reachable_keys(dungeon) do
-      [] ->
-        # No more keys to collect, return distance traveled
-        curr_distance
+  # Memoize min distance to path
+  defp min_dists_to_all_key_paths(
+         dungeon,
+         curr_distance,
+         depth,
+         remaining_keys,
+         path_suffix_cache
+       ) do
+    IO.inspect(depth)
 
-      found_keys ->
-        # Otherwise, choose possible paths, and take the min distance
-        found_keys
-        |> Enum.map(fn {_, _, dist, new_dungeon} ->
-          min_distance_to_collect_all_keys(new_dungeon, dist + curr_distance)
-        end)
-        |> Enum.min()
+    # If someone has already explored this subtree before, bail out
+    if Map.has_key?(path_suffix_cache, remaining_keys) do
+      path_suffix_cache
+    else
+      # If there's no more keys to look for, we're done!
+      case Dungeon.Crawler.reachable_keys(dungeon) do
+        [] ->
+          # IO.inspect("found path to output")
+          # IO.inspect(curr_distance)
+          Map.put(path_suffix_cache, MapSet.new(), curr_distance)
+
+        adj_keys ->
+          # Otherwise we need to find the min distance to the remaining keys, and cache the result
+
+          min_dist_caches =
+            Enum.map(adj_keys, fn {key, key_coord, dist, new_dungeon} ->
+              min_dists_to_all_key_paths(
+                new_dungeon,
+                dist + curr_distance,
+                depth + 1,
+                MapSet.delete(remaining_keys, key),
+                path_suffix_cache
+              )
+            end)
+
+          # Merge min caches
+          min_dist_cache =
+            List.foldl(min_dist_caches, %{}, fn cache, acc ->
+              Map.merge(cache, acc, fn _k, v1, v2 -> min(v1, v2) end)
+            end)
+
+          # IO.inspect(min_dist_cache)
+
+          # Since each cache has the remaining_keys - each(adj_keys) subsets cached,
+          # we can just ask which one has the shortest path to here
+          min_dist_to_remaining_keys =
+            adj_keys
+            |> Enum.map(fn {k, _, dist_to_key, _} ->
+              subset = MapSet.delete(remaining_keys, k)
+              dist_to_subset = Map.get(min_dist_cache, subset)
+              dist_to_subset + dist_to_key
+            end)
+            |> Enum.min()
+
+          # IO.inspect(min_dist_to_remaining_keys)
+
+          Map.put(min_dist_cache, remaining_keys, min_dist_to_remaining_keys)
+      end
     end
   end
 
@@ -82,7 +151,7 @@ defmodule Main do
     # This seems to imply that there will be some path exploration/backtracking in order
     # to explore valid paths and pick the shortest.
 
-    {:ok, contents} = File.read("ex1.part1")
+    {:ok, contents} = File.read("ex4.part1")
 
     dungeon_str =
       contents
@@ -147,6 +216,7 @@ defmodule Main do
     IO.inspect(dungeon)
 
     # Part 1:
+    # min_dist = min_distance_to_collect_all_keys(:queue.in({dungeon, 0, ["@"]}, :queue.new()))
     min_dist = min_distance_to_collect_all_keys(dungeon)
     IO.inspect(min_dist)
   end
