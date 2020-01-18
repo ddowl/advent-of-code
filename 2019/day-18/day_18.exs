@@ -18,10 +18,14 @@ defmodule Dungeon do
   end
 
   defmodule Crawler do
-    def all_keys_min_distance(explorer, dungeon) do
+    def all_keys_min_distance_dijkstras(graph, source_node) do
+      unknown_vertices = MapSet.new()
+    end
+
+    def all_keys_min_distance_dp(explorer, dungeon) do
       {:ok, path_cache_pid} = Agent.start_link(fn -> %{} end)
 
-      shortest_path_len = all_keys_min_distance(explorer, dungeon, path_cache_pid)
+      shortest_path_len = all_keys_min_distance_dp(explorer, dungeon, path_cache_pid)
 
       Agent.stop(path_cache_pid)
       # final_cache = Agent.get(path_cache_pid, & &1)
@@ -36,7 +40,7 @@ defmodule Dungeon do
     end
 
     # Memoize min distance to path (location, keys_held)
-    defp all_keys_min_distance(explorer, dungeon, path_cache_pid) do
+    defp all_keys_min_distance_dp(explorer, dungeon, path_cache_pid) do
       curr_key = explorer.curr_key
       found_keys = explorer.found_keys
       curr_cache = Agent.get(path_cache_pid, & &1)
@@ -56,7 +60,7 @@ defmodule Dungeon do
 
         _ ->
           # explore adjacent nodes
-          case Dungeon.Crawler.reachable_keys(dungeon, curr_key, found_keys) do
+          case Dungeon.Crawler.reachable_keys(dungeon, {curr_key, found_keys}) do
             # If there's no more keys to look for, we're done!
             [] ->
               Agent.update(path_cache_pid, fn c ->
@@ -70,7 +74,7 @@ defmodule Dungeon do
               min_dist_to_curr =
                 adj_keys
                 |> Enum.map(fn {key, dist_to_key} ->
-                  all_keys_min_distance(
+                  all_keys_min_distance_dp(
                     %Dungeon.Explorer{
                       explorer
                       | curr_key: key,
@@ -97,11 +101,9 @@ defmodule Dungeon do
           %Dungeon.State{
             doors_between_keys: doors_bk,
             distances_between_keys: distance_bk,
-            doors: doors,
             keys: keys
           },
-          curr_key,
-          found_keys
+          {curr_key, found_keys}
         ) do
       lost_keys =
         keys
@@ -193,6 +195,31 @@ defmodule Dungeon do
           end
       end
     end
+
+    def discover_graph(dungeon, source_node) do
+      Dungeon.Crawler.reachable_keys(dungeon, source_node)
+
+      discover_graph(:queue.in(source_node, :queue.new()), dungeon, MapSet.new([source_node]))
+    end
+
+    defp discover_graph(queue, dungeon, seen) do
+      case :queue.out(queue) do
+        {:empty, _} ->
+          # Explored the whole graph
+          seen
+
+        {{:value, {key, found_keys}}, queue} ->
+          unseen_adjs =
+            Dungeon.Crawler.reachable_keys(dungeon, {key, found_keys})
+            |> Enum.map(fn {k, _} -> {k, MapSet.put(found_keys, k)} end)
+            |> Enum.filter(fn adj -> !MapSet.member?(seen, adj) end)
+
+          seen = MapSet.union(seen, MapSet.new(unseen_adjs))
+
+          new_queue = Enum.reduce(unseen_adjs, queue, fn adj, q -> :queue.in(adj, q) end)
+          discover_graph(new_queue, dungeon, seen)
+      end
+    end
   end
 end
 
@@ -212,7 +239,7 @@ defmodule Main do
     # This seems to imply that there will be some path exploration/backtracking in order
     # to explore valid paths and pick the shortest.
 
-    {:ok, contents} = File.read("ex4.part1")
+    {:ok, contents} = File.read("ex2.part1")
 
     dungeon_str =
       contents
@@ -271,7 +298,6 @@ defmodule Main do
     # Precompute distances and list of doors between each pair of points
     keys_and_start = Map.merge(keys, %{"@" => starting_pos})
     keys_and_start_syms = Map.keys(keys_and_start)
-    keys_and_start_coords = Map.values(keys_and_start)
 
     key_pairs = for i <- keys_and_start_syms, j <- keys_and_start_syms, i != j, i < j, do: {i, j}
 
@@ -318,9 +344,15 @@ defmodule Main do
       total_distance: 0
     }
 
-    # IO.inspect(Dungeon.Crawler.reachable_keys(dungeon, explorer.curr_key, explorer.found_keys))
-    min_dist = Dungeon.Crawler.all_keys_min_distance(explorer, dungeon)
-    IO.inspect(min_dist)
+    # min_dist = Dungeon.Crawler.all_keys_min_distance_dp(explorer, dungeon)
+
+    source_node = {"@", MapSet.new(["@"])}
+    graph = Dungeon.Crawler.discover_graph(dungeon, source_node)
+
+    IO.inspect(graph)
+    IO.inspect(Enum.count(graph))
+    # min_dist = Dungeon.Crawler.all_keys_min_distance_dijkstras(graph, source_node)
+    # IO.inspect(min_dist)
   end
 end
 
