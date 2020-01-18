@@ -1,6 +1,6 @@
 defmodule Dungeon do
   defmodule State do
-    defstruct [:curr_pos, :open_spaces, :doors, :keys]
+    defstruct [:curr_pos, :open_spaces, :doors, :keys, :path, :total_distance]
   end
 
   defmodule Crawler do
@@ -29,10 +29,12 @@ defmodule Dungeon do
             curr_pos: curr_pos,
             open_spaces: MapSet.put(dungeon.open_spaces, door_pos),
             keys: Map.delete(dungeon.keys, curr_pos),
-            doors: Map.delete(dungeon.doors, corresponding_door)
+            doors: Map.delete(dungeon.doors, corresponding_door),
+            path: dungeon.path ++ [found_key],
+            total_distance: dungeon.total_distance + distance_from_start
           }
 
-          {found_key, curr_pos, distance_from_start, new_dungeon}
+          {found_key, distance_from_start, new_dungeon}
       end
     end
 
@@ -45,95 +47,59 @@ end
 
 # Main module needed to use structs defined in same .exs file
 defmodule Main do
-  # # Use BFS to find the shortest path:
-  # # Pop state from queue
-  # # Figure out all of the keys you can reach from your state.
-  # # Push states into queue in sorted order of distance
-  # # Return first solution
-  # def min_distance_to_collect_all_keys(queue) do
-  #   {{:value, {dungeon, dist, path}}, queue} = :queue.out(queue)
-
-  #   IO.inspect(Enum.join(path))
-  #   adj_keys = Dungeon.Crawler.reachable_keys(dungeon)
-
-  #   case adj_keys do
-  #     [] ->
-  #       dist
-
-  #     adj_keys ->
-  #       sorted_states =
-  #         adj_keys
-  #         |> Enum.map(fn {key, _, d, new_dungeon} -> {new_dungeon, dist + d, path ++ [key]} end)
-  #         |> Enum.sort_by(fn {_, d, _} -> d end)
-
-  #       new_queue = Enum.reduce(sorted_states, queue, fn val, q -> :queue.in(val, q) end)
-  #       min_distance_to_collect_all_keys(new_queue)
-  #   end
-  # end
-
   def min_distance_to_collect_all_keys(dungeon) do
-    min_dists_to_all_key_paths(dungeon, 0, 0, MapSet.new(Map.values(dungeon.keys)), %{})
-    |> Map.get(MapSet.new())
+    {:ok, cache_pid} = Agent.start_link(fn -> %{} end)
+    min_dists_to_all_key_paths(dungeon, cache_pid)
+    final_cache = Agent.get(cache_pid, & &1)
+    Agent.stop(cache_pid)
+    all_keys = MapSet.new(Map.values(dungeon.keys))
+
+    # IO.inspect(final_cache)
+
+    final_cache
+    |> Enum.filter(fn {{_, keys_found}, _} -> keys_found == all_keys end)
+    |> Enum.map(fn {_, d} -> d end)
+    |> Enum.min()
   end
 
-  # Memoize min distance to path
-  defp min_dists_to_all_key_paths(
-         dungeon,
-         curr_distance,
-         depth,
-         remaining_keys,
-         path_suffix_cache
-       ) do
-    IO.inspect(depth)
+  # Memoize min distance to path (location, keys_held)
+  defp min_dists_to_all_key_paths(dungeon, cache_pid) do
+    curr_pos = dungeon.curr_pos
+    remaining_keys = MapSet.new(Map.values(dungeon.keys))
+    keys_found = MapSet.new(dungeon.path)
+    # IO.inspect("remaining keys")
+    # IO.inspect(remaining_keys)
+    curr_cache = Agent.get(cache_pid, & &1)
+    # IO.inspect("curr cache")
+    # IO.inspect(curr_cache)
+    total_distance = dungeon.total_distance
+    # IO.inspect("curr pos, keys found, total distance, cache")
+    # IO.inspect({curr_pos, keys_found, total_distance, curr_cache})
 
-    # If someone has already explored this subtree before, bail out
-    if Map.has_key?(path_suffix_cache, remaining_keys) do
-      path_suffix_cache
-    else
-      # If there's no more keys to look for, we're done!
-      case Dungeon.Crawler.reachable_keys(dungeon) do
-        [] ->
-          # IO.inspect("found path to output")
-          # IO.inspect(curr_distance)
-          Map.put(path_suffix_cache, MapSet.new(), curr_distance)
+    # Bail out if cache'd distance is less than current?
+    case Map.get(curr_cache, {curr_pos, keys_found}) do
+      # if getting to this (position, key set) took longer than the cache, no need to explore any more
+      {cached_distance, _} when total_distance >= cached_distance ->
+        nil
 
-        adj_keys ->
-          # Otherwise we need to find the min distance to the remaining keys, and cache the result
+      _ ->
+        # set our distance as the current, least-known path to this node
+        Agent.update(cache_pid, fn c ->
+          Map.put(c, {curr_pos, keys_found}, {total_distance, dungeon.path})
+        end)
 
-          min_dist_caches =
-            Enum.map(adj_keys, fn {key, key_coord, dist, new_dungeon} ->
-              min_dists_to_all_key_paths(
-                new_dungeon,
-                dist + curr_distance,
-                depth + 1,
-                MapSet.delete(remaining_keys, key),
-                path_suffix_cache
-              )
+        # explore adjacent nodes
+        case Dungeon.Crawler.reachable_keys(dungeon) do
+          # If there's no more keys to look for, we're done!
+          [] ->
+            nil
+
+          adj_keys ->
+            # Otherwise we need to find the min distance to the remaining keys
+            Enum.each(adj_keys, fn {key, _, dungeon_at_key} ->
+              min_dists_to_all_key_paths(dungeon_at_key, cache_pid)
             end)
-
-          # Merge min caches
-          min_dist_cache =
-            List.foldl(min_dist_caches, %{}, fn cache, acc ->
-              Map.merge(cache, acc, fn _k, v1, v2 -> min(v1, v2) end)
-            end)
-
-          # IO.inspect(min_dist_cache)
-
-          # Since each cache has the remaining_keys - each(adj_keys) subsets cached,
-          # we can just ask which one has the shortest path to here
-          min_dist_to_remaining_keys =
-            adj_keys
-            |> Enum.map(fn {k, _, dist_to_key, _} ->
-              subset = MapSet.delete(remaining_keys, k)
-              dist_to_subset = Map.get(min_dist_cache, subset)
-              dist_to_subset + dist_to_key
-            end)
-            |> Enum.min()
-
-          # IO.inspect(min_dist_to_remaining_keys)
-
-          Map.put(min_dist_cache, remaining_keys, min_dist_to_remaining_keys)
-      end
+        end
     end
   end
 
@@ -151,7 +117,7 @@ defmodule Main do
     # This seems to imply that there will be some path exploration/backtracking in order
     # to explore valid paths and pick the shortest.
 
-    {:ok, contents} = File.read("ex4.part1")
+    {:ok, contents} = File.read("ex5.part1")
 
     dungeon_str =
       contents
@@ -210,7 +176,9 @@ defmodule Main do
       curr_pos: starting_pos,
       open_spaces: open_spaces,
       doors: doors,
-      keys: keys
+      keys: keys,
+      path: [],
+      total_distance: 0
     }
 
     IO.inspect(dungeon)
