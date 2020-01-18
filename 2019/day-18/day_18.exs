@@ -18,8 +18,56 @@ defmodule Dungeon do
   end
 
   defmodule Crawler do
-    def all_keys_min_distance_dijkstras(graph, source_node) do
-      unknown_vertices = MapSet.new()
+    def all_keys_min_distance_dijkstras(graph, source_node, dungeon) do
+      key_set = dungeon.keys |> Map.keys() |> MapSet.new() |> MapSet.put("@")
+      node_collected_all_keys? = fn {_, found_keys} -> MapSet.equal?(found_keys, key_set) end
+
+      {target_node, dist, _prev} =
+        all_keys_min_distance_dijkstras(
+          graph,
+          dungeon,
+          node_collected_all_keys?,
+          %{source_node => 0},
+          %{}
+        )
+
+      case target_node do
+        nil -> raise "Exhausted Dijkstra search. We can recover from this, but it's unexpected"
+        n -> Map.get(dist, n)
+      end
+    end
+
+    defp all_keys_min_distance_dijkstras(unknown_vertices, dungeon, target_fn, dist, prev) do
+      if Enum.empty?(unknown_vertices) do
+        # traversed entire graph
+        {nil, dist, prev}
+      else
+        {u, dist_u} =
+          dist
+          |> Map.take(MapSet.to_list(unknown_vertices))
+          |> Enum.min_by(fn {_, v} -> v end)
+
+        unknown_vertices = MapSet.delete(unknown_vertices, u)
+
+        if target_fn.(u) do
+          {u, dist, prev}
+        else
+          {dist, prev} =
+            Dungeon.Crawler.reachable_keys(dungeon, u)
+            |> Enum.map(fn {k, dist} -> {{k, MapSet.put(elem(u, 1), k)}, dist} end)
+            |> Enum.reduce({dist, prev}, fn {v, dist_u_to_v}, {dist, prev} ->
+              alt = dist_u + dist_u_to_v
+
+              if alt < Map.get(dist, v) do
+                {Map.put(dist, v, alt), Map.put(prev, v, u)}
+              else
+                {dist, prev}
+              end
+            end)
+
+          all_keys_min_distance_dijkstras(unknown_vertices, dungeon, target_fn, dist, prev)
+        end
+      end
     end
 
     def all_keys_min_distance_dp(explorer, dungeon) do
@@ -239,7 +287,7 @@ defmodule Main do
     # This seems to imply that there will be some path exploration/backtracking in order
     # to explore valid paths and pick the shortest.
 
-    {:ok, contents} = File.read("ex2.part1")
+    {:ok, contents} = File.read("input.txt")
 
     dungeon_str =
       contents
@@ -336,23 +384,27 @@ defmodule Main do
       doors_between_keys: doors_between_keys
     }
 
-    # For tracking during search
-    explorer = %Dungeon.Explorer{
-      curr_key: "@",
-      found_keys: MapSet.new(["@"]),
-      path: [],
-      total_distance: 0
-    }
+    # # For tracking during search
+    # explorer = %Dungeon.Explorer{
+    #   curr_key: "@",
+    #   found_keys: MapSet.new(["@"]),
+    #   path: [],
+    #   total_distance: 0
+    # }
 
     # min_dist = Dungeon.Crawler.all_keys_min_distance_dp(explorer, dungeon)
 
     source_node = {"@", MapSet.new(["@"])}
     graph = Dungeon.Crawler.discover_graph(dungeon, source_node)
 
-    IO.inspect(graph)
-    IO.inspect(Enum.count(graph))
-    # min_dist = Dungeon.Crawler.all_keys_min_distance_dijkstras(graph, source_node)
-    # IO.inspect(min_dist)
+    min_dist =
+      Dungeon.Crawler.all_keys_min_distance_dijkstras(
+        graph,
+        source_node,
+        dungeon
+      )
+
+    IO.inspect(min_dist)
   end
 end
 
