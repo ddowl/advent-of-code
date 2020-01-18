@@ -18,14 +18,13 @@ defmodule Dungeon do
   end
 
   defmodule Crawler do
-    def all_keys_min_distance_dijkstras(graph, source_node, dungeon) do
-      key_set = dungeon.keys |> Map.keys() |> MapSet.new() |> MapSet.put("@")
+    def all_keys_min_distance_dijkstras(adj_list_graph, source_node, key_set) do
       node_collected_all_keys? = fn {_, found_keys} -> MapSet.equal?(found_keys, key_set) end
 
       {target_node, dist, _prev} =
         all_keys_min_distance_dijkstras(
-          graph,
-          dungeon,
+          adj_list_graph,
+          MapSet.new(Map.keys(adj_list_graph)),
           node_collected_all_keys?,
           %{source_node => 0},
           %{}
@@ -37,7 +36,7 @@ defmodule Dungeon do
       end
     end
 
-    defp all_keys_min_distance_dijkstras(unknown_vertices, dungeon, target_fn, dist, prev) do
+    defp all_keys_min_distance_dijkstras(graph, unknown_vertices, target_fn, dist, prev) do
       if Enum.empty?(unknown_vertices) do
         # traversed entire graph
         {nil, dist, prev}
@@ -53,8 +52,7 @@ defmodule Dungeon do
           {u, dist, prev}
         else
           {dist, prev} =
-            Dungeon.Crawler.reachable_keys(dungeon, u)
-            |> Enum.map(fn {k, dist} -> {{k, MapSet.put(elem(u, 1), k)}, dist} end)
+            Dungeon.Crawler.adjacent_nodes(graph, u)
             |> Enum.reduce({dist, prev}, fn {v, dist_u_to_v}, {dist, prev} ->
               alt = dist_u + dist_u_to_v
 
@@ -65,7 +63,7 @@ defmodule Dungeon do
               end
             end)
 
-          all_keys_min_distance_dijkstras(unknown_vertices, dungeon, target_fn, dist, prev)
+          all_keys_min_distance_dijkstras(graph, unknown_vertices, target_fn, dist, prev)
         end
       end
     end
@@ -170,6 +168,15 @@ defmodule Dungeon do
 
       reachable_lost_keys
       |> Enum.map(fn k -> {k, Map.get(distance_bk, MapSet.new([curr_key, k]))} end)
+    end
+
+    def reachable_nodes(dungeon, {curr_key, found_keys}) do
+      reachable_keys(dungeon, {curr_key, found_keys})
+      |> Enum.map(fn {new_key, dist} -> {{new_key, MapSet.put(found_keys, new_key)}, dist} end)
+    end
+
+    def adjacent_nodes(graph, node) do
+      Map.get(graph, node)
     end
 
     defp adjacent_open_spaces(open_spaces, {x, y}) do
@@ -287,7 +294,7 @@ defmodule Main do
     # This seems to imply that there will be some path exploration/backtracking in order
     # to explore valid paths and pick the shortest.
 
-    {:ok, contents} = File.read("input.txt")
+    {:ok, contents} = File.read("ex4.part1")
 
     dungeon_str =
       contents
@@ -395,15 +402,21 @@ defmodule Main do
     # min_dist = Dungeon.Crawler.all_keys_min_distance_dp(explorer, dungeon)
 
     source_node = {"@", MapSet.new(["@"])}
-    graph = Dungeon.Crawler.discover_graph(dungeon, source_node)
+    graph_nodes = Dungeon.Crawler.discover_graph(dungeon, source_node)
 
-    min_dist =
-      Dungeon.Crawler.all_keys_min_distance_dijkstras(
-        graph,
-        source_node,
-        dungeon
-      )
+    IO.inspect("Search space states:")
+    IO.inspect(Enum.count(graph_nodes))
 
+    adj_list =
+      graph_nodes
+      |> Enum.map(fn node -> {node, Dungeon.Crawler.reachable_nodes(dungeon, node)} end)
+      |> Enum.into(%{})
+
+    key_set = dungeon.keys |> Map.keys() |> MapSet.new() |> MapSet.put("@")
+
+    min_dist = Dungeon.Crawler.all_keys_min_distance_dijkstras(adj_list, source_node, key_set)
+
+    IO.inspect("Min distance to collect all keys:")
     IO.inspect(min_dist)
   end
 end
