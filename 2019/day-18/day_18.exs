@@ -5,10 +5,15 @@ defmodule Dungeon do
 
   defmodule Crawler do
     def min_distance_to_collect_all_keys(dungeon) do
-      {:ok, cache_pid} = Agent.start_link(fn -> %{} end)
-      shortest_path_len = min_dists_to_all_key_paths(dungeon, cache_pid)
-      # final_cache = Agent.get(cache_pid, & &1)
-      Agent.stop(cache_pid)
+      {:ok, path_cache_pid} = Agent.start_link(fn -> %{} end)
+      {:ok, reachable_key_cache_pid} = Agent.start_link(fn -> %{} end)
+
+      shortest_path_len =
+        min_dists_to_all_key_paths(dungeon, path_cache_pid, reachable_key_cache_pid)
+
+      Agent.stop(path_cache_pid)
+      Agent.stop(reachable_key_cache_pid)
+      # final_cache = Agent.get(path_cache_pid, & &1)
       # all_keys = MapSet.new(Map.values(dungeon.keys))
 
       # final_cache
@@ -20,10 +25,11 @@ defmodule Dungeon do
     end
 
     # Memoize min distance to path (location, keys_held)
-    defp min_dists_to_all_key_paths(dungeon, cache_pid) do
+    defp min_dists_to_all_key_paths(dungeon, path_cache_pid, reachable_key_cache_pid) do
       curr_pos = dungeon.curr_pos
       keys_found = MapSet.new(dungeon.path)
-      curr_cache = Agent.get(cache_pid, & &1)
+      curr_cache = Agent.get(path_cache_pid, & &1)
+
       # IO.inspect("curr cache")
       # IO.inspect(curr_cache)
       total_distance = dungeon.total_distance
@@ -39,10 +45,10 @@ defmodule Dungeon do
 
         _ ->
           # explore adjacent nodes
-          case Dungeon.Crawler.reachable_keys(dungeon) do
+          case Dungeon.Crawler.reachable_keys(dungeon, reachable_key_cache_pid) do
             # If there's no more keys to look for, we're done!
             [] ->
-              Agent.update(cache_pid, fn c ->
+              Agent.update(path_cache_pid, fn c ->
                 Map.put(c, {curr_pos, keys_found}, {total_distance, dungeon.path})
               end)
 
@@ -53,12 +59,16 @@ defmodule Dungeon do
               min_dist_to_curr =
                 adj_keys
                 |> Enum.map(fn {key, _, dungeon_at_key} ->
-                  min_dists_to_all_key_paths(dungeon_at_key, cache_pid)
+                  min_dists_to_all_key_paths(
+                    dungeon_at_key,
+                    path_cache_pid,
+                    reachable_key_cache_pid
+                  )
                 end)
                 |> Enum.min()
 
               # cache this node with the least-distance path so far
-              Agent.update(cache_pid, fn c ->
+              Agent.update(path_cache_pid, fn c ->
                 Map.put(c, {curr_pos, keys_found}, {min_dist_to_curr, dungeon.path})
               end)
 
@@ -67,9 +77,19 @@ defmodule Dungeon do
       end
     end
 
-    def reachable_keys(dungeon) do
-      reachable_keys(dungeon, dungeon.curr_pos, MapSet.new(), 0, MapSet.new())
-      |> List.flatten()
+    def reachable_keys(dungeon, cache_pid) do
+      case Agent.get(cache_pid, fn cache -> Map.get(cache, dungeon) end) do
+        nil ->
+          keys =
+            reachable_keys(dungeon, dungeon.curr_pos, MapSet.new(), 0, MapSet.new())
+            |> List.flatten()
+
+          Agent.update(cache_pid, fn cache -> Map.put(cache, dungeon, keys) end)
+          keys
+
+        keys ->
+          keys
+      end
     end
 
     defp reachable_keys(dungeon, curr_pos, seen, distance_from_start, reached_keys) do
