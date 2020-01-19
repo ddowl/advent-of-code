@@ -157,7 +157,7 @@ end
 
 defmodule Main do
   def main do
-    {:ok, contents} = File.read("ex4.part1")
+    {:ok, contents} = File.read("input.txt")
 
     dungeon_str =
       contents
