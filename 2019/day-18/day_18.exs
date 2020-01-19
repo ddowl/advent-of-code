@@ -1,13 +1,4 @@
 defmodule Dungeon do
-  defmodule Explorer do
-    defstruct [
-      :curr_key,
-      :found_keys,
-      :path,
-      :total_distance
-    ]
-  end
-
   defmodule State do
     defstruct [
       :doors,
@@ -18,77 +9,10 @@ defmodule Dungeon do
   end
 
   defmodule Crawler do
-    def all_keys_min_distance_dijkstras(adj_list_graph, source_node, key_set) do
-      node_collected_all_keys? = fn {_, found_keys} -> MapSet.equal?(found_keys, key_set) end
-
-      {target_node, dist, _prev} =
-        all_keys_min_distance_dijkstras(
-          adj_list_graph,
-          MapSet.new(Map.keys(adj_list_graph)),
-          node_collected_all_keys?,
-          %{source_node => 0},
-          %{}
-        )
-
-      case target_node do
-        nil -> raise "Exhausted Dijkstra search. We can recover from this, but it's unexpected"
-        n -> Map.get(dist, n)
-      end
-    end
-
-    defp all_keys_min_distance_dijkstras(graph, unknown_vertices, target_fn, dist, prev) do
-      if Enum.empty?(unknown_vertices) do
-        # traversed entire graph
-        {nil, dist, prev}
-      else
-        {u, dist_u} =
-          dist
-          |> Map.take(MapSet.to_list(unknown_vertices))
-          |> Enum.min_by(fn {_, v} -> v end)
-
-        unknown_vertices = MapSet.delete(unknown_vertices, u)
-
-        if target_fn.(u) do
-          {u, dist, prev}
-        else
-          {dist, prev} =
-            Dungeon.Crawler.adjacent_nodes(graph, u)
-            |> Enum.reduce({dist, prev}, fn {v, dist_u_to_v}, {dist, prev} ->
-              alt = dist_u + dist_u_to_v
-
-              if alt < Map.get(dist, v) do
-                {Map.put(dist, v, alt), Map.put(prev, v, u)}
-              else
-                {dist, prev}
-              end
-            end)
-
-          all_keys_min_distance_dijkstras(graph, unknown_vertices, target_fn, dist, prev)
-        end
-      end
-    end
-
-    defp query_cache_loop(cache_pid) do
-      IO.inspect({"cache size: ", Agent.get(cache_pid, fn c -> Enum.count(Map.keys(c)) end)})
-      Process.sleep(1000)
-      query_cache_loop(cache_pid)
-    end
-
     def all_keys_min_distance_dp(graph, source_node, key_set) do
       {:ok, path_cache_pid} = Agent.start_link(fn -> %{} end)
-      spawn_link(fn -> query_cache_loop(path_cache_pid) end)
-
       shortest_path_len = all_keys_min_distance_dp(graph, source_node, 0, key_set, path_cache_pid)
-
       Agent.stop(path_cache_pid)
-      # final_cache = Agent.get(path_cache_pid, & &1)
-      # all_keys = MapSet.new(Map.values(dungeon.keys))
-
-      # final_cache
-      # |> Enum.filter(fn {{_, keys_found}, _} -> keys_found == all_keys end)
-      # |> Enum.map(fn {_, d} -> d end)
-      # |> Enum.min()
-
       shortest_path_len
     end
 
@@ -99,35 +23,39 @@ defmodule Dungeon do
       else
         case Agent.get(cache_pid, fn c -> Map.get(c, curr_node) end) do
           nil ->
-            # explore adjacent nodes
-            case Dungeon.Crawler.adjacent_nodes(graph, curr_node) do
-              # If there's no more keys to look for, we're done!
-              [] ->
-                Agent.update(cache_pid, fn c -> Map.put(c, curr_node, 0) end)
-                0
+            adj_nodes = Dungeon.Crawler.adjacent_nodes(graph, curr_node)
 
-              adj_nodes ->
-                # Otherwise we need to find the min distance to the remaining keys
-                min_dist_to_curr =
-                  adj_nodes
-                  |> Enum.map(fn {next_node, dist_to_adj_node} ->
-                    dist_to_next = distance + dist_to_adj_node
+            # Otherwise we need to find the min distance to the remaining keys
+            min_dist_to_curr =
+              adj_nodes
+              |> Enum.map(fn {next_node, dist_to_adj_node} ->
+                dist_to_next = distance + dist_to_adj_node
 
-                    dist_to_adj_node +
-                      all_keys_min_distance_dp(graph, next_node, dist_to_next, key_set, cache_pid)
-                  end)
-                  |> Enum.min()
+                dist_to_goal =
+                  all_keys_min_distance_dp(graph, next_node, dist_to_next, key_set, cache_pid)
 
-                # cache this node with the least-distance path so far
-                Agent.update(cache_pid, fn c -> Map.put(c, curr_node, min_dist_to_curr) end)
-                min_dist_to_curr
-            end
+                dist_to_adj_node + dist_to_goal
+              end)
+              |> Enum.min()
+
+            # cache this node with the least-distance path so far
+            Agent.update(cache_pid, fn c -> Map.put(c, curr_node, min_dist_to_curr) end)
+            min_dist_to_curr
 
           # if getting to this (position, key set) took longer than a cache'd path, no need to explore any more
           cached_distance ->
             cached_distance
         end
       end
+    end
+
+    def adjacent_nodes(graph, node) do
+      Map.get(graph, node)
+    end
+
+    def reachable_nodes(dungeon, {curr_key, found_keys}) do
+      reachable_keys(dungeon, {curr_key, found_keys})
+      |> Enum.map(fn {new_key, dist} -> {{new_key, MapSet.put(found_keys, new_key)}, dist} end)
     end
 
     def reachable_keys(
@@ -157,131 +85,79 @@ defmodule Dungeon do
       |> Enum.map(fn k -> {k, Map.get(distance_bk, MapSet.new([curr_key, k]))} end)
     end
 
-    def reachable_nodes(dungeon, {curr_key, found_keys}) do
-      reachable_keys(dungeon, {curr_key, found_keys})
-      |> Enum.map(fn {new_key, dist} -> {{new_key, MapSet.put(found_keys, new_key)}, dist} end)
-    end
-
-    def adjacent_nodes(graph, node) do
-      Map.get(graph, node)
-    end
-
     defp adjacent_open_spaces(open_spaces, {x, y}) do
       [{x + 1, y}, {x - 1, y}, {x, y + 1}, {x, y - 1}]
       |> Enum.filter(fn pos -> MapSet.member?(open_spaces, pos) end)
     end
 
-    # TODO: consolidate BFS tracking logic of "distance_from" and "doors_between" into function params
-    def distance_from(a, b, spaces) do
-      distance_from(:queue.in({a, 0}, :queue.new()), b, spaces, MapSet.new([a]))
+    def bfs(a, b, init_val, adj_fn, tracking_update_fn) do
+      queue = :queue.in({a, init_val}, :queue.new())
+      seen = MapSet.new([a])
+      bfs_helper(queue, b, seen, adj_fn, tracking_update_fn)
     end
 
-    defp distance_from(queue, goal, spaces, seen) do
+    defp bfs_helper(queue, goal, seen, adj_fn, tracking_update_fn) do
       case :queue.out(queue) do
         {:empty, _} ->
           # could not find a path
-          nil
+          seen
 
-        {{:value, {pos, dist}}, queue} ->
-          if pos == goal do
+        {{:value, {node, acc}}, queue} ->
+          if node == goal do
             # found the goal!
-            dist
+            acc
           else
             unseen_adjs =
-              adjacent_open_spaces(spaces, pos)
-              |> Enum.filter(fn adj -> !MapSet.member?(seen, adj) end)
-
-            seen = MapSet.union(seen, MapSet.new(unseen_adjs))
-
-            new_queue =
-              Enum.reduce(unseen_adjs, queue, fn adj, q -> :queue.in({adj, dist + 1}, q) end)
-
-            distance_from(new_queue, goal, spaces, seen)
-          end
-      end
-    end
-
-    def doors_between(a, b, spaces, doors) do
-      doors_between(:queue.in({a, MapSet.new()}, :queue.new()), b, spaces, doors, MapSet.new([a]))
-    end
-
-    defp doors_between(queue, goal, spaces, doors, seen) do
-      case :queue.out(queue) do
-        {:empty, _} ->
-          # could not find a path
-          nil
-
-        {{:value, {pos, doors_in_path}}, queue} ->
-          if pos == goal do
-            # found the goal!
-            doors_in_path
-          else
-            unseen_adjs =
-              adjacent_open_spaces(spaces, pos)
+              adj_fn.(node)
               |> Enum.filter(fn adj -> !MapSet.member?(seen, adj) end)
 
             seen = MapSet.union(seen, MapSet.new(unseen_adjs))
 
             new_queue =
               Enum.reduce(unseen_adjs, queue, fn adj, q ->
-                updated_doors =
-                  case Map.get(doors, adj) do
-                    nil -> doors_in_path
-                    sym -> MapSet.put(doors_in_path, sym)
-                  end
-
-                :queue.in({adj, updated_doors}, q)
+                :queue.in({adj, tracking_update_fn.(adj, acc)}, q)
               end)
 
-            doors_between(new_queue, goal, spaces, doors, seen)
+            bfs_helper(new_queue, goal, seen, adj_fn, tracking_update_fn)
           end
       end
     end
 
-    def discover_graph(dungeon, source_node) do
-      Dungeon.Crawler.reachable_keys(dungeon, source_node)
-
-      discover_graph(:queue.in(source_node, :queue.new()), dungeon, MapSet.new([source_node]))
+    def distance_from(a, b, spaces) do
+      adj_nodes_fn = fn node -> adjacent_open_spaces(spaces, node) end
+      inc_fn = fn _, acc -> acc + 1 end
+      bfs(a, b, 0, adj_nodes_fn, inc_fn)
     end
 
-    defp discover_graph(queue, dungeon, seen) do
-      case :queue.out(queue) do
-        {:empty, _} ->
-          # Explored the whole graph
-          seen
+    def doors_between(a, b, spaces, doors) do
+      adj_nodes_fn = fn node -> adjacent_open_spaces(spaces, node) end
 
-        {{:value, {key, found_keys}}, queue} ->
-          unseen_adjs =
-            Dungeon.Crawler.reachable_keys(dungeon, {key, found_keys})
-            |> Enum.map(fn {k, _} -> {k, MapSet.put(found_keys, k)} end)
-            |> Enum.filter(fn adj -> !MapSet.member?(seen, adj) end)
-
-          seen = MapSet.union(seen, MapSet.new(unseen_adjs))
-
-          new_queue = Enum.reduce(unseen_adjs, queue, fn adj, q -> :queue.in(adj, q) end)
-          discover_graph(new_queue, dungeon, seen)
+      update_doors_fn = fn adj, acc ->
+        case Map.get(doors, adj) do
+          nil -> acc
+          sym -> MapSet.put(acc, sym)
+        end
       end
+
+      bfs(a, b, MapSet.new(), adj_nodes_fn, update_doors_fn)
+    end
+
+    def discover_graph(dungeon, source_node) do
+      adj_nodes_fn = fn node ->
+        Dungeon.Crawler.reachable_nodes(dungeon, node)
+        |> Enum.map(fn {n, _} -> n end)
+      end
+
+      update_tracking_fn = fn _, _ -> nil end
+
+      bfs(source_node, nil, nil, adj_nodes_fn, update_tracking_fn)
     end
   end
 end
 
-# Main module needed to use structs defined in same .exs file
 defmodule Main do
   def main do
-    # Puzzle input today represents a map (dungeon) we ("@") need to crawl in order to
-    # collect keys (lowercase letters) and open doors (corresponding uppercase letters)
-    # constrained by walls ("#"). The goal is to determine the shortest distance to
-    # collect all of the keys.
-    #
-    # A hint from the prompt:
-    #   Now, you have a choice between keys d and e. While key e is closer,
-    #   collecting it now would be slower in the long run than collecting key d
-    #   first, so that's the best choice...
-    #
-    # This seems to imply that there will be some path exploration/backtracking in order
-    # to explore valid paths and pick the shortest.
-
-    {:ok, contents} = File.read("input.txt")
+    {:ok, contents} = File.read("ex4.part1")
 
     dungeon_str =
       contents
@@ -370,7 +246,6 @@ defmodule Main do
       end)
       |> Enum.into(%{})
 
-    # Static state
     dungeon = %Dungeon.State{
       keys: keys,
       doors: doors,
@@ -378,19 +253,8 @@ defmodule Main do
       doors_between_keys: doors_between_keys
     }
 
-    # For tracking during search
-    explorer = %Dungeon.Explorer{
-      curr_key: "@",
-      found_keys: MapSet.new(["@"]),
-      path: [],
-      total_distance: 0
-    }
-
     source_node = {"@", MapSet.new(["@"])}
     graph_nodes = Dungeon.Crawler.discover_graph(dungeon, source_node)
-
-    IO.inspect("Search space states:")
-    IO.inspect(Enum.count(graph_nodes))
 
     adj_list =
       graph_nodes
@@ -398,11 +262,7 @@ defmodule Main do
       |> Enum.into(%{})
 
     key_set = dungeon.keys |> Map.keys() |> MapSet.new() |> MapSet.put("@")
-
-    # min_dist = Dungeon.Crawler.all_keys_min_distance_dijkstras(adj_list, source_node, key_set)
     min_dist = Dungeon.Crawler.all_keys_min_distance_dp(adj_list, source_node, key_set)
-
-    IO.inspect("Min distance to collect all keys:")
     IO.inspect(min_dist)
   end
 end
