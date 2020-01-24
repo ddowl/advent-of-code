@@ -18,21 +18,26 @@ defmodule Dungeon do
 
     # Memoize min distance to path (location, keys_held)
     defp all_keys_min_distance_dp(graph, curr_node, distance, key_set, cache_pid) do
-      if MapSet.equal?(elem(curr_node, 1), key_set) do
+      IO.inspect("curr_node")
+      IO.inspect(curr_node)
+
+      if collected_all_keys?(curr_node, key_set) do
         0
       else
         case Agent.get(cache_pid, fn c -> Map.get(c, curr_node) end) do
           nil ->
             adj_nodes = Dungeon.Crawler.adjacent_nodes(graph, curr_node)
+            IO.inspect("adj_nodes")
+            IO.inspect(adj_nodes)
 
             # Otherwise we need to find the min distance to the remaining keys
             min_dist_to_curr =
               adj_nodes
-              |> Enum.map(fn {next_node, dist_to_adj_node} ->
+              |> Enum.map(fn [{next_node, dist_to_adj_node}] ->
                 dist_to_next = distance + dist_to_adj_node
 
                 dist_to_goal =
-                  all_keys_min_distance_dp(graph, next_node, dist_to_next, key_set, cache_pid)
+                  all_keys_min_distance_dp(graph, [next_node], dist_to_next, key_set, cache_pid)
 
                 dist_to_adj_node + dist_to_goal
               end)
@@ -49,13 +54,32 @@ defmodule Dungeon do
       end
     end
 
+    defp collected_all_keys?(node, key_set) do
+      # IO.inspect(node)
+      # IO.inspect(key_set)
+      # IO.inspect(Enum.map(node, fn {_, keys} -> keys end))
+
+      all_found_keys =
+        node
+        |> Enum.map(fn {_, ks} -> ks end)
+        |> Enum.reduce(MapSet.new(), fn ks, acc -> MapSet.union(acc, ks) end)
+
+      # IO.inspect(all_found_keys)
+
+      MapSet.equal?(all_found_keys, key_set)
+    end
+
     def adjacent_nodes(graph, node) do
       Map.get(graph, node)
     end
 
-    def reachable_nodes(dungeon, {curr_key, found_keys}) do
-      reachable_keys(dungeon, {curr_key, found_keys})
-      |> Enum.map(fn {new_key, dist} -> {{new_key, MapSet.put(found_keys, new_key)}, dist} end)
+    def reachable_nodes(dungeon, node) do
+      Enum.map(node, fn {curr_key, found_keys} ->
+        reachable_keys(dungeon, {curr_key, found_keys})
+        |> Enum.map(fn {new_key, dist} ->
+          {{new_key, MapSet.put(found_keys, new_key)}, dist}
+        end)
+      end)
     end
 
     def reachable_keys(
@@ -103,20 +127,29 @@ defmodule Dungeon do
           seen
 
         {{:value, {node, acc}}, queue} ->
+          IO.inspect("dequeued node")
+          IO.inspect({node, acc})
+
           if node == goal do
             # found the goal!
             acc
           else
             unseen_adjs =
               adj_fn.(node)
+              |> IO.inspect()
               |> Enum.filter(fn adj -> !MapSet.member?(seen, adj) end)
 
             seen = MapSet.union(seen, MapSet.new(unseen_adjs))
+            IO.inspect("seen")
+            IO.inspect(seen)
 
             new_queue =
               Enum.reduce(unseen_adjs, queue, fn adj, q ->
                 :queue.in({adj, tracking_update_fn.(adj, acc)}, q)
               end)
+
+            IO.inspect("new_queue")
+            IO.inspect(new_queue)
 
             bfs_helper(new_queue, goal, seen, adj_fn, tracking_update_fn)
           end
@@ -144,8 +177,12 @@ defmodule Dungeon do
 
     def discover_graph(dungeon, source_node) do
       adj_nodes_fn = fn node ->
+        IO.inspect("adj_nodes_fn input")
+        IO.inspect(node)
+
         Dungeon.Crawler.reachable_nodes(dungeon, node)
-        |> Enum.map(fn {n, _} -> n end)
+        |> List.flatten()
+        |> Enum.map(fn {n, _} -> [n] end)
       end
 
       update_tracking_fn = fn _, _ -> nil end
@@ -157,7 +194,7 @@ end
 
 defmodule Main do
   def main do
-    {:ok, contents} = File.read("input.txt")
+    {:ok, contents} = File.read("ex1.part1")
 
     dungeon_str =
       contents
@@ -210,11 +247,24 @@ defmodule Main do
       end)
       |> Enum.into(%{}, fn {k, [v]} -> {k, v} end)
 
-    starting_pos = dungeon_coords |> Map.get("@") |> hd
+    robots =
+      dungeon_coords
+      |> Enum.filter(fn {sym, _} ->
+        sym == "@"
+      end)
+      |> Enum.with_index()
+      |> Enum.map(fn {{"@", coord}, i} -> {Integer.to_string(i), coord} end)
+      |> Enum.into(%{}, fn {k, [v]} -> {k, v} end)
+
+    IO.inspect(robots)
+
+    starting_pos = robots |> Map.values() |> hd
+    IO.inspect(starting_pos)
+    IO.inspect(keys)
 
     # Part 1:
     # Precompute distances and list of doors between each pair of points
-    keys_and_start = Map.merge(keys, %{"@" => starting_pos})
+    keys_and_start = Map.merge(keys, robots)
     keys_and_start_syms = Map.keys(keys_and_start)
 
     key_pairs = for i <- keys_and_start_syms, j <- keys_and_start_syms, i != j, i < j, do: {i, j}
@@ -253,15 +303,34 @@ defmodule Main do
       doors_between_keys: doors_between_keys
     }
 
-    source_node = {"@", MapSet.new(["@"])}
+    IO.inspect(dungeon)
+
+    source_node = Enum.map(robots, fn {k, _} -> {k, MapSet.new([k])} end)
+    # IO.inspect("Source node")
+    # IO.inspect(source_node)
     graph_nodes = Dungeon.Crawler.discover_graph(dungeon, source_node)
+
+    IO.inspect(graph_nodes)
+
+    IO.inspect("Num graph nodes:")
+    IO.inspect(Enum.count(graph_nodes))
 
     adj_list =
       graph_nodes
-      |> Enum.map(fn node -> {node, Dungeon.Crawler.reachable_nodes(dungeon, node)} end)
+      |> Enum.map(fn node ->
+        IO.inspect(node)
+        {node, Dungeon.Crawler.reachable_nodes(dungeon, node)}
+      end)
       |> Enum.into(%{})
 
-    key_set = dungeon.keys |> Map.keys() |> MapSet.new() |> MapSet.put("@")
+    IO.inspect("constructed adj list")
+    IO.inspect(adj_list)
+
+    # Process.exit()
+
+    key_set =
+      dungeon.keys |> Map.keys() |> MapSet.new() |> MapSet.union(MapSet.new(Map.keys(robots)))
+
     min_dist = Dungeon.Crawler.all_keys_min_distance_dp(adj_list, source_node, key_set)
     IO.inspect(min_dist)
   end
