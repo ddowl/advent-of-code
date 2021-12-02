@@ -9,7 +9,7 @@ enum Direction {
 }
 
 fn main() {
-    let filename = "input/test.txt";
+    let filename = "input/input.txt";
     // Open the file in read-only mode (ignoring errors).
     let file = File::open(filename).unwrap();
     let reader = BufReader::new(file);
@@ -40,6 +40,12 @@ fn main() {
     println!("distance {}", distance);
     println!("depth {}", depth);
     println!("product {}", distance * depth);
+
+    // Part 2
+    let (distance, depth) = count_with_aim(&instructions);
+    println!("distance {}", distance);
+    println!("depth {}", depth);
+    println!("product {}", distance * depth);
 }
 
 fn count_distance(instructions: &Vec<(Direction, i32)>) -> i32 {
@@ -59,4 +65,17 @@ fn count_depth(instructions: &Vec<(Direction, i32)>) -> i32 {
             Direction::Down => *mag,
         })
         .sum()
+}
+
+fn count_with_aim(instructions: &Vec<(Direction, i32)>) -> (i32, i32) {
+    let (distance, depth, _mag) = instructions.iter().fold(
+        (0, 0, 0),
+        |(curr_distance, curr_depth, curr_aim), (dir, mag)| match dir {
+            Direction::Down => (curr_distance, curr_depth, curr_aim + mag),
+            Direction::Up => (curr_distance, curr_depth, curr_aim - mag),
+            Direction::Forward => (curr_distance + mag, curr_depth + (curr_aim * mag), curr_aim),
+        },
+    );
+
+    (distance, depth)
 }
