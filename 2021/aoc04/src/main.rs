@@ -16,31 +16,34 @@ fn main() {
         print_board(board)
     });
 
-    let (final_drawn_number, winning_board) = match play_bingo(drawn_numbers, boards) {
+    // Part 1
+    let (final_drawn_number, winning_board) =
+        match find_first_winning_board(&drawn_numbers, boards.to_owned()) {
+            None => {
+                panic!("no winning board found");
+            }
+            Some(x) => x,
+        };
+
+    print_score(final_drawn_number, &winning_board);
+
+    // Part 2
+    let (final_drawn_number, winning_board) = match find_last_winning_board(&drawn_numbers, boards)
+    {
         None => {
-            panic!("no winning board found");
+            panic!("no last winning board found");
         }
         Some(x) => x,
     };
 
-    println!("final drawn number: {}", final_drawn_number);
-    print_board(&winning_board);
-
-    let sum_of_unmarked_on_winning_board = sum_of_unmarked(&winning_board);
-    println!(
-        "sum_of_unmarked_on_winning_board: {}",
-        sum_of_unmarked_on_winning_board
-    );
-
-    let score = final_drawn_number * sum_of_unmarked_on_winning_board;
-    println!("score: {}", score);
+    print_score(final_drawn_number, &winning_board);
 }
 
-fn play_bingo(
-    drawn_numbers: Vec<usize>,
+fn find_first_winning_board(
+    drawn_numbers: &Vec<usize>,
     mut boards: Vec<(BingoIndex, BingoBoard)>,
 ) -> Option<(usize, BingoBoard)> {
-    for n in drawn_numbers {
+    for &n in drawn_numbers {
         boards
             .iter_mut()
             .for_each(|(bidx, board)| mark_board(bidx, board, n));
@@ -49,6 +52,38 @@ fn play_bingo(
 
         if let Some(&(_, winning_board)) = maybe_winning_board {
             return Some((n, winning_board));
+        }
+    }
+
+    None
+}
+
+fn find_last_winning_board(
+    drawn_numbers: &Vec<usize>,
+    mut boards: Vec<(BingoIndex, BingoBoard)>,
+) -> Option<(usize, BingoBoard)> {
+    fn next_winning_board_pos(boards: &Vec<(BingoIndex, BingoBoard)>) -> Option<usize> {
+        boards
+            .iter()
+            .enumerate()
+            .find(|(_, (_, board))| has_bingo(board))
+            .map(|(i, _)| i)
+    }
+
+    for &n in drawn_numbers {
+        boards
+            .iter_mut()
+            .for_each(|(bidx, board)| mark_board(bidx, board, n));
+
+        let mut maybe_winning_board_pos = next_winning_board_pos(&boards);
+
+        while let Some(idx) = maybe_winning_board_pos {
+            let (_, winning_board) = boards.remove(idx);
+            if boards.is_empty() {
+                return Some((n, winning_board));
+            }
+
+            maybe_winning_board_pos = next_winning_board_pos(&boards);
         }
     }
 
@@ -139,6 +174,20 @@ fn parse_input_file(filename: &str) -> (Vec<usize>, Vec<(BingoIndex, BingoBoard)
         .collect();
 
     (drawn_numbers, boards)
+}
+
+fn print_score(final_drawn_number: usize, winning_board: &BingoBoard) {
+    println!("final drawn number: {}", final_drawn_number);
+    print_board(&winning_board);
+
+    let sum_of_unmarked_on_winning_board = sum_of_unmarked(&winning_board);
+    println!(
+        "sum_of_unmarked_on_winning_board: {}",
+        sum_of_unmarked_on_winning_board
+    );
+
+    let score = final_drawn_number * sum_of_unmarked_on_winning_board;
+    println!("score: {}", score);
 }
 
 fn print_board(board: &BingoBoard) {
