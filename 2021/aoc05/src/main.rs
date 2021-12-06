@@ -12,32 +12,41 @@ struct Point {
 #[derive(Debug)]
 struct LineSegment(Point, Point);
 
+/**
+Note to self: If I were to go back and do this again, I'd pursue the "intersection of line segments" strategy rather than "evaluate coverage over each point" strategy.
+We know that it's the more efficient method, and the addition of the diagonal lines gave the former strategy a number of edge cases that were tricky to account for.
+*/
+
 fn main() {
-    let filename = "input/test.txt";
+    let filename = "input/input.txt";
     let line_segments: Vec<LineSegment> = parse_input_file(filename);
 
     println!("all line segments: {:?}", line_segments);
     println!();
 
-    let hv_line_segments: Vec<&LineSegment> = line_segments
-        .iter()
-        .filter(|&ls| ls.is_horizontal() || ls.is_vertical())
-        .collect();
+    // Part 1
+    // let hv_line_segments: Vec<LineSegment> = line_segments
+    //     .into_iter()
+    //     .filter(|ls| ls.is_horizontal() || ls.is_vertical())
+    //     .collect();
 
-    println!(
-        "horizontal and vertical line segments: {:?}",
-        hv_line_segments
-    );
-    println!();
+    // println!(
+    //     "horizontal and vertical line segments: {:?}",
+    //     hv_line_segments
+    // );
+    // println!();
 
-    let num_covered_points = count_covered_points(&hv_line_segments);
+    // let num_covered_points = count_covered_points(&hv_line_segments);
+
+    // Part 2
+    let num_covered_points = count_covered_points(&line_segments);
 
     println!("num_covered_points: {}", num_covered_points);
     println!();
 }
 
 // Simpler to implement, but less efficient due to querying every discrete point.
-fn count_covered_points(segments: &Vec<&LineSegment>) -> usize {
+fn count_covered_points(segments: &Vec<LineSegment>) -> usize {
     let max_x = segments
         .iter()
         .flat_map(|ls| vec![ls.0.x, ls.1.x])
@@ -54,12 +63,9 @@ fn count_covered_points(segments: &Vec<&LineSegment>) -> usize {
         for y in 0..=max_y {
             let p = Point { x, y };
             // println!("checking point {:?}", p);
-            let num_covering_segments = segments
-                .iter()
-                .filter(|&ls| ls.contains(&p))
-                // .inspect(|&ls| println!("{:?} covers {:?}", ls, p))
-                .count();
-            if num_covering_segments > 1 {
+            let covering_segments: Vec<_> = segments.iter().filter(|&ls| ls.contains(&p)).collect();
+            if covering_segments.len() > 1 {
+                // println!("{:?} covers {:?}", covering_segments, p);
                 num_covered_points += 1;
             }
         }
@@ -128,7 +134,27 @@ impl LineSegment {
     fn contains(&self, p: &Point) -> bool {
         let xrange = valid_range(self.0.x, self.1.x);
         let yrange = valid_range(self.0.y, self.1.y);
-        xrange.contains(&p.x) && yrange.contains(&p.y)
+        let within_range = xrange.contains(&p.x) && yrange.contains(&p.y);
+
+        if self.is_horizontal() || self.is_vertical() {
+            within_range
+        } else {
+            // println!("diagonal slope! {:?}, {:?}", self, p,);
+            // check if slope between p and self.0 is the same as self.0 and self.1
+
+            if p == &self.0 || p == &self.1 {
+                return true;
+            }
+            let self_slope = LineSegment::slope(&self.0, &self.1);
+            let point_slope = LineSegment::slope(&self.0, p);
+
+            if let (Some(self_slope), Some(point_slope)) = (self_slope, point_slope) {
+                // println!("{:?}, {:?}", self_slope, point_slope);
+                self_slope == point_slope && within_range
+            } else {
+                false
+            }
+        }
     }
 
     // Determines points of intersection between this line and another.
@@ -162,12 +188,26 @@ impl LineSegment {
         }
         vec![]
     }
+
+    fn slope(a: &Point, b: &Point) -> Option<(isize, isize)> {
+        let diff_y = isize::try_from(b.y).unwrap() - isize::try_from(a.y).unwrap();
+        let diff_x = isize::try_from(b.x).unwrap() - isize::try_from(a.x).unwrap();
+        // println!("{}, {}", diff_y, diff_x);
+
+        let div = diff_y.checked_div(diff_x);
+        let rem = diff_y.checked_rem(diff_x);
+        if let (Some(div), Some(rem)) = (div, rem) {
+            Some((div, rem))
+        } else {
+            None
+        }
+    }
 }
 
 fn valid_range(a: usize, b: usize) -> RangeInclusive<usize> {
     if a < b {
-        (a..=b)
+        a..=b
     } else {
-        (b..=a)
+        b..=a
     }
 }
