@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use std::collections::{BinaryHeap, HashSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
@@ -30,8 +31,30 @@ impl Heightmap {
         }
     }
 
-    fn get_height(&self, (x, y): Coordinate) -> u8 {
-        self.grid[x][y]
+    fn find_basins(&self, low_points: &Vec<Coordinate>) -> Vec<HashSet<Coordinate>> {
+        // for each low point, explore around until encountering a 9 or edge
+        low_points
+            .into_iter()
+            .map(|coord| {
+                let mut basin_coords = HashSet::new();
+                self.explore_basin(*coord, &mut basin_coords);
+                basin_coords
+            })
+            .collect()
+    }
+
+    fn explore_basin(
+        &self,
+        curr_coordinate: Coordinate,
+        basin_coordinates: &mut HashSet<Coordinate>,
+    ) {
+        if self.get_height(curr_coordinate) != 9 && !basin_coordinates.contains(&curr_coordinate) {
+            basin_coordinates.insert(curr_coordinate);
+
+            self.neighbor_coords(curr_coordinate)
+                .into_iter()
+                .for_each(|c| self.explore_basin(c, basin_coordinates));
+        }
     }
 
     fn find_low_points(&self) -> Vec<(usize, usize)> {
@@ -67,15 +90,20 @@ impl Heightmap {
     fn in_bounds(&self, (x, y): &(isize, isize)) -> bool {
         x >= &0 && x < &self.inum_rows && y >= &0 && y < &self.inum_cols
     }
+
+    fn get_height(&self, (x, y): Coordinate) -> u8 {
+        self.grid[x][y]
+    }
 }
 
 fn main() {
-    let filename = "input/test.txt";
+    let filename = "input/input.txt";
     let heightmap: Heightmap = Heightmap::new(parse_input_file(filename));
 
     println!("heightmap: {:?}", heightmap);
     println!();
 
+    // Part 1
     let low_points = heightmap.find_low_points();
     println!("low points: {:?}", low_points);
 
@@ -89,6 +117,28 @@ fn main() {
         "sum of risk levels: {:?}",
         risk_levels.iter().sum::<usize>()
     );
+
+    // Part 2
+    let basins: Vec<HashSet<Coordinate>> = heightmap.find_basins(&low_points);
+    println!("basins: {:?}", basins);
+    let mut basin_sizes: BinaryHeap<_> = basins.iter().map(|b| b.len()).collect();
+    println!("basin sizes: {:?}", basin_sizes);
+
+    let num_largest = 3;
+    let largest_basin_sizes: Vec<_> = (0..num_largest)
+        .into_iter()
+        .map(|_| basin_sizes.pop().unwrap())
+        .collect();
+
+    println!(
+        "{} largest basin sizes: {:?}",
+        num_largest, largest_basin_sizes
+    );
+    println!(
+        "product of {} largest basin sizes: {:?}",
+        num_largest,
+        largest_basin_sizes.into_iter().product::<usize>()
+    )
 }
 
 fn parse_input_file(filename: &str) -> Vec<Vec<u8>> {
