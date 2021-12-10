@@ -16,10 +16,17 @@ static SYNTAX_ERROR_SCORES: phf::Map<char, usize> = phf_map! {
     '>' => 25137,
 };
 
+static AUTOCOMPLETE_SCORES: phf::Map<char, usize> = phf_map! {
+    ')' => 1,
+    ']' => 2,
+    '}' => 3,
+    '>' => 4,
+};
+
 #[derive(Debug, PartialEq, Eq)]
 enum ChunkParseResult {
     Complete,
-    Incomplete,
+    Incomplete(String),
     Corrupted(char),
 }
 
@@ -30,15 +37,33 @@ fn main() {
     println!("lines: {:?}", lines);
     println!();
 
-    let syntax_error_score: usize = lines
+    let parsed_chunks: Vec<ChunkParseResult> = lines.iter().map(parse_chunks).collect();
+
+    // Part 1
+    let syntax_error_score: usize = parsed_chunks
         .iter()
-        .map(parse_chunks)
         .map(|e| match e {
             ChunkParseResult::Corrupted(c) => SYNTAX_ERROR_SCORES[&c],
             _ => 0,
         })
         .sum();
-    println!("syntax_error_score: {}", syntax_error_score)
+    println!("syntax_error_score: {}", syntax_error_score);
+
+    // Part 2
+    let mut autocomplete_scores: Vec<usize> = parsed_chunks
+        .iter()
+        .map(|e| match e {
+            ChunkParseResult::Incomplete(s) => score_autocomplete_string(s),
+            _ => 0,
+        })
+        .filter(|score| score != &0)
+        .collect();
+    println!("autocomplete_scores: {:?}", autocomplete_scores);
+
+    autocomplete_scores.sort();
+    let median_autocomplete_score = autocomplete_scores[autocomplete_scores.len() / 2];
+
+    println!("median autocomplete score: {:?}", median_autocomplete_score);
 }
 
 fn parse_chunks(syntax_line: &String) -> ChunkParseResult {
@@ -71,8 +96,21 @@ fn parse_chunks(syntax_line: &String) -> ChunkParseResult {
     if open_chunk_stack.is_empty() {
         ChunkParseResult::Complete
     } else {
-        ChunkParseResult::Incomplete
+        let autocomplete = open_chunk_stack
+            .into_iter()
+            .rev()
+            .map(|opening| CHUNK_SYMBOL_COMPLEMENTS[&opening])
+            .collect::<String>();
+        ChunkParseResult::Incomplete(autocomplete)
     }
+}
+
+fn score_autocomplete_string(autocomplete_string: &String) -> usize {
+    let mut total_score = 0;
+    for c in autocomplete_string.chars() {
+        total_score = total_score * 5 + AUTOCOMPLETE_SCORES[&c]
+    }
+    total_score
 }
 
 fn parse_input_file(filename: &str) -> Vec<String> {
