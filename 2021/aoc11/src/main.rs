@@ -8,17 +8,29 @@ type DumboOctopusEnergyLevels = [[u8; 10]; 10];
 fn main() {
     let filename = "input/input.txt";
     let mut energy_levels: DumboOctopusEnergyLevels = parse_input_file(filename);
+    let initial_energy_levels = energy_levels;
 
-    println!("initial energy_levels: {:?}", energy_levels);
+    println!("initial energy_levels: {:?}", initial_energy_levels);
     println!();
 
+    // Part 1
     let num_steps = 100;
-    let mut num_flashes: usize = 0;
+    let mut total_flashes: usize = 0;
     for _ in 0..num_steps {
-        num_flashes += step(&mut energy_levels);
+        total_flashes += step(&mut energy_levels);
     }
 
-    println!("num flashes after {} steps: {}", num_steps, num_flashes);
+    println!("num flashes after {} steps: {}", num_steps, total_flashes);
+
+    // Part 2
+    let mut energy_levels = initial_energy_levels;
+    let mut flashes = 0;
+    let mut steps = 0;
+    while flashes != 100 {
+        flashes = step(&mut energy_levels);
+        steps += 1;
+    }
+    println!("first step where all octopuses flash: {}", steps);
 }
 
 fn step(energy_levels: &mut DumboOctopusEnergyLevels) -> usize {
