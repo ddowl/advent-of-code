@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
@@ -26,7 +26,7 @@ impl CaveNetwork {
         self.explore_all_paths_helper(
             "start".to_string(),
             vec![],
-            HashSet::new(),
+            HashMap::new(),
             &mut paths_to_end,
         );
         paths_to_end
@@ -36,7 +36,7 @@ impl CaveNetwork {
         &self,
         curr_cave: String,
         mut curr_path: Vec<String>,
-        mut visited_small_caves: HashSet<String>,
+        mut visited_small_caves: HashMap<String, u8>,
         paths_to_end: &mut Vec<Vec<String>>,
     ) {
         // println!("curr_path: {:?}, curr_cave: {:?}", curr_path, curr_cave);
@@ -45,10 +45,18 @@ impl CaveNetwork {
             paths_to_end.push(curr_path);
         } else {
             // not the end KEEP SEARCHING
-            if !visited_small_caves.contains(&curr_cave) {
+
+            let visited = visited_small_caves.contains_key(&curr_cave);
+            let visited_once = visited_small_caves
+                .get(&curr_cave)
+                .map_or_else(|| false, |n| n == &1);
+            let small_cave_visited_twice = visited_small_caves.values().any(|n| n == &2);
+
+            if !visited || (visited_once && !small_cave_visited_twice && curr_cave != "start") {
                 if !curr_cave.chars().next().unwrap().is_uppercase() {
                     // small caves can only be searched once
-                    visited_small_caves.insert(curr_cave.clone());
+                    let cave_visits = visited_small_caves.entry(curr_cave.clone()).or_insert(0);
+                    *cave_visits += 1;
                 }
 
                 // copy current path and branch out from here
