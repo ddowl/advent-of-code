@@ -21,8 +21,10 @@ fn main() {
 
     let mut coord_set: HashSet<Coordinate> = HashSet::from_iter(coords);
 
-    apply_fold(fold_instructions[0], &mut coord_set);
-    println!("coord_set size: {:?}", coord_set.len());
+    for f in fold_instructions {
+        apply_fold(f, &mut coord_set);
+    }
+    print_coords(&coord_set);
 }
 
 fn apply_fold(f: FoldInstruction, coord_set: &mut HashSet<Coordinate>) {
@@ -66,6 +68,22 @@ fn flip_across_fold(
 
     coord_set.remove(&coord);
     coord_set.insert(folded_coord);
+}
+
+fn print_coords(coord_set: &HashSet<Coordinate>) {
+    let max_x = coord_set.iter().map(|(x, _)| x).max().unwrap();
+    let max_y = coord_set.iter().map(|(_, y)| y).max().unwrap();
+
+    for y in 0..=*max_y {
+        for x in 0..=*max_x {
+            if coord_set.contains(&(x, y)) {
+                print!("# ");
+            } else {
+                print!(". ");
+            }
+        }
+        println!();
+    }
 }
 
 fn parse_input_file(filename: &str) -> (Vec<Coordinate>, Vec<FoldInstruction>) {
