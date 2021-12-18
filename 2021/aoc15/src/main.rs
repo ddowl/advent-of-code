@@ -39,18 +39,34 @@ fn main() {
     println!("risk_levels: {:?}", risk_levels);
     println!();
 
-    let cavern_len = risk_levels.len();
-    let cost_to_exit = shortest_path_cost(&risk_levels, (0, 0), (cavern_len - 1, cavern_len - 1));
+    let cavern_size = risk_levels.len();
+
+    // Part 1
+    let cost_to_exit = shortest_path_cost(
+        &risk_levels,
+        cavern_size,
+        (0, 0),
+        (cavern_size - 1, cavern_size - 1),
+    );
+    println!("cost_to_exit: {:?}", cost_to_exit);
+
+    // Part 2
+    let extended_cavern_size = 5 * cavern_size;
+    let cost_to_exit = shortest_path_cost(
+        &risk_levels,
+        extended_cavern_size,
+        (0, 0),
+        (extended_cavern_size - 1, extended_cavern_size - 1),
+    );
     println!("cost_to_exit: {:?}", cost_to_exit);
 }
 
 fn shortest_path_cost(
     risk_levels: &Vec<Vec<u8>>,
+    cavern_size: usize,
     start_coord: Coordinate,
     dest_coord: Coordinate,
 ) -> Option<usize> {
-    let cavern_len = risk_levels.len();
-
     // add all coordinates to the vertex priority queue
     let mut unvisited_vertex_heap = BinaryHeap::new();
 
@@ -77,10 +93,9 @@ fn shortest_path_cost(
 
         // For each node we can reach, see if we can find a way with
         // a lower cost going through this node
-        for unvisited_neighbor in grid_neighbors(coord, cavern_len) {
-            let (x, y) = unvisited_neighbor;
+        for unvisited_neighbor in grid_neighbors(coord, cavern_size) {
             let next = State {
-                cost: cost + <usize>::from(risk_levels[x][y]),
+                cost: cost + risk(risk_levels, unvisited_neighbor),
                 coord: unvisited_neighbor,
             };
 
@@ -109,6 +124,13 @@ fn grid_neighbors((x, y): Coordinate, side_len: usize) -> Vec<Coordinate> {
         .filter(|(cx, cy)| in_bounds(*cx) && in_bounds(*cy))
         .map(|(cx, cy)| (cx.try_into().unwrap(), cy.try_into().unwrap()))
         .collect()
+}
+
+fn risk(risk_levels: &Vec<Vec<u8>>, (x, y): Coordinate) -> usize {
+    let real_values_len = risk_levels.len();
+    let (xdiv, xrem) = (x / real_values_len, x % real_values_len);
+    let (ydiv, yrem) = (y / real_values_len, y % real_values_len);
+    (<usize>::from(risk_levels[xrem][yrem]) + xdiv + ydiv - 1) % 9 + 1
 }
 
 fn parse_input_file(filename: &str) -> Vec<Vec<u8>> {
