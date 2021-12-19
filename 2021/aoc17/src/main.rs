@@ -1,5 +1,4 @@
 use itertools::Itertools;
-use std::cmp::max;
 use std::fs;
 use std::ops::RangeInclusive;
 
@@ -28,21 +27,14 @@ fn step(((x_pos, y_pos), (x_vel, y_vel)): &mut KineticState) {
     *y_vel -= 1;
 }
 
-fn launch_probe(area: &Area, mut state: KineticState) -> Option<isize> {
-    let mut max_y = state.0 .1;
+fn launch_probe(area: &Area, mut state: KineticState) -> bool {
     while !past_area(&area, &state.0) {
         if within_area(&area, &state.0) {
-            return Some(max_y);
+            return true;
         }
         step(&mut state);
-        max_y = max(max_y, state.0 .1);
     }
-    None
-}
-
-// https://en.wikipedia.org/wiki/Triangular_number
-fn triangle(n: usize) -> usize {
-    n * (n + 1) / 2
+    false
 }
 
 fn main() {
@@ -52,25 +44,16 @@ fn main() {
     println!("target_area: {:?}", target_area);
     println!();
 
-    // try to be smart and compute possible x_vels in who's triangle numbers fall in the target's x range.
-    let x_vels_in_triangle_range = (0..100)
-        .map(|n| {
-            (
-                isize::try_from(n).unwrap(),
-                isize::try_from(triangle(n)).unwrap(),
-            )
-        })
-        .take_while(|(_, tri)| tri <= target_area.0.end())
-        .filter(|(_, tri)| tri >= target_area.0.start())
-        .map(|(i, _)| i);
-
     let max_y_vel = 1000;
-    let max_height = x_vels_in_triangle_range
-        .cartesian_product(0..max_y_vel)
-        .filter_map(|init_vel| launch_probe(&target_area, ((0, 0), init_vel)))
-        .max()
-        .unwrap();
-    println!("max_height: {:?}", max_height);
+    let accurate_initial_vels: Vec<Velocity> = (0..1000)
+        .cartesian_product(-500..max_y_vel)
+        .filter(|init_vel| launch_probe(&target_area, ((0, 0), *init_vel)))
+        .collect();
+    println!("accurate_initial_vels: {:?}", accurate_initial_vels);
+    println!(
+        "num accurate_initial_vels: {:?}",
+        accurate_initial_vels.len()
+    );
 }
 
 fn parse_input_file(filename: &str) -> Area {
