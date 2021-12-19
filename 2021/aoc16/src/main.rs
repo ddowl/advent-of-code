@@ -123,6 +123,28 @@ impl Packet {
             }
         }
     }
+
+    fn eval(&self) -> usize {
+        match &self.payload {
+            Literal(val) => *val,
+            PacketPayload::Operator {
+                length_type: _,
+                sub_packets,
+            } => {
+                let sub_packet_vals: Vec<usize> = sub_packets.iter().map(|p| p.eval()).collect();
+                match self.type_id {
+                    0 => sub_packet_vals.into_iter().sum(),
+                    1 => sub_packet_vals.into_iter().product(),
+                    2 => sub_packet_vals.into_iter().min().unwrap(),
+                    3 => sub_packet_vals.into_iter().max().unwrap(),
+                    5 => (sub_packet_vals[0] > sub_packet_vals[1]) as usize,
+                    6 => (sub_packet_vals[0] < sub_packet_vals[1]) as usize,
+                    7 => (sub_packet_vals[0] == sub_packet_vals[1]) as usize,
+                    tid => panic!("detected invalid operator type id: {}", tid),
+                }
+            }
+        }
+    }
 }
 
 fn to_binary_str(hex_str: String) -> String {
@@ -148,12 +170,18 @@ fn main() {
         println!("processing transmission '{}'...", bit_transmission);
         let binary_str = to_binary_str(bit_transmission.to_string());
         let (parsed_packet, _) = Packet::parse(&binary_str);
+
+        // Part 1
         let version_sum: usize = parsed_packet
             .versions()
             .into_iter()
             .map(|n| usize::from(n))
             .sum();
         println!("sum of packet versions: {}", version_sum);
+
+        // Part 2
+        let val = parsed_packet.eval();
+        println!("packet expression val: {}", val);
     }
 }
 
@@ -281,6 +309,27 @@ mod tests {
                 .map(|n| usize::from(n))
                 .sum();
             assert_eq!(version_sum, expected_version_sum);
+        }
+    }
+
+    #[test]
+    fn eval_packets() {
+        let tests = HashMap::from([
+            ("C200B40A82", 3),
+            ("04005AC33890", 54),
+            ("880086C3E88112", 7),
+            ("CE00C43D881120", 9),
+            ("D8005AC2A8F0", 1),
+            ("F600BC2D8F", 0),
+            ("9C005AC2F8F0", 0),
+            ("9C0141080250320F1802104A08", 1),
+        ]);
+        for (hex, expected_val) in tests {
+            println!("evaluating packet '{}'...", hex);
+            let binary_str = to_binary_str(hex.to_string());
+            let (parsed_packet, _) = Packet::parse(&binary_str);
+            let val = parsed_packet.eval();
+            assert_eq!(val, expected_val);
         }
     }
 }
