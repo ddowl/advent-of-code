@@ -1,4 +1,6 @@
 use crate::SnailfishNumber::*;
+use itertools::Itertools;
+use std::cmp::max;
 use std::fs;
 
 #[derive(PartialEq, Eq, Debug, Hash)]
@@ -159,6 +161,15 @@ impl SnailfishNumber {
     }
 }
 
+impl Clone for SnailfishNumber {
+    fn clone(&self) -> Self {
+        match self {
+            Literal(v) => Literal(*v),
+            Pair(left, right) => Pair(left.clone(), right.clone()),
+        }
+    }
+}
+
 fn main() {
     let filename = "input/input.txt";
     let num_strs = parse_input_file(filename);
@@ -166,13 +177,34 @@ fn main() {
     println!("num_strs: {:?}", num_strs);
     println!();
 
-    let sum = num_strs
+    let snailfish_nums: Vec<_> = num_strs
         .into_iter()
         .map(|s| SnailfishNumber::parse(&s).0)
+        .collect();
+    println!("snailfish_nums: {:?}", snailfish_nums);
+
+    // Part 1
+    let sum = snailfish_nums
+        .iter()
+        .cloned()
         .reduce(|acc, num| acc.add(num))
         .unwrap();
     println!("sum: {:?}", sum);
     println!("magnitude of sum: {}", sum.magnitude());
+
+    // Part 2
+    let max_mag = snailfish_nums
+        .iter()
+        .cartesian_product(snailfish_nums.iter())
+        .filter(|(num_a, num_b)| num_a != num_b)
+        .map(|(num_a, num_b)| num_a.clone().add(num_b.clone()).magnitude())
+        .max()
+        .unwrap();
+
+    println!(
+        "max magnitude of any sum of 2 distinct snailfish nums: {:?}",
+        max_mag
+    );
 }
 
 fn parse_input_file(filename: &str) -> Vec<String> {
@@ -288,7 +320,6 @@ mod tests {
         ]);
 
         for (sf_num, after_split_num) in tests {
-            // println!("{:?}", sf_num);
             let (split_sf_num, _) = sf_num.split();
             assert_eq!(split_sf_num, after_split_num);
         }
