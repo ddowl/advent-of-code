@@ -7,15 +7,19 @@ fn main() {
     let (enhancement_algorithm, img) = parse_input_file(filename);
     let enhancement_algo_slice = enhancement_algorithm.as_slice();
 
-    println!("enhancement_algorithm: {:?}", enhancement_algorithm);
-    println!("img: {:?}", img);
-    println!();
+    // println!("enhancement_algorithm: {:?}", enhancement_algorithm);
+    // println!("img: {:?}", img);
+    // println!();
 
-    let output1 = enhance((img, false), enhancement_algo_slice);
-    let output2 = enhance(output1, enhancement_algo_slice);
-    println!("output2: {:?}", output2);
-    pretty(&output2.0);
-    let num_lit_pixels: usize = output2
+    let mut inf_img: InfiniteImg = (img, false);
+    let num_enhance_times = 50;
+    for _ in 0..num_enhance_times {
+        inf_img = enhance(inf_img, enhancement_algo_slice);
+    }
+
+    // println!("inf_img: {:?}", inf_img);
+    pretty(&inf_img.0);
+    let num_lit_pixels: usize = inf_img
         .0
         .iter()
         .map(|row| {
@@ -88,7 +92,10 @@ fn enhance(
         })
         .collect();
 
-    (output_img, enhancement_algorithm[0] == '#')
+    (
+        output_img,
+        (enhancement_algorithm[0] == '#') ^ out_of_bounds_is_set,
+    )
 }
 
 fn parse_input_file(filename: &str) -> (Vec<char>, Vec<Vec<char>>) {
