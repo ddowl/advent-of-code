@@ -1,35 +1,87 @@
+use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::fs;
 
+#[macro_use]
+extern crate lazy_static;
+
+lazy_static! {
+    static ref ROLL_FREQUENCY: HashMap<usize, usize> =
+        HashMap::from([(3, 1), (4, 3), (5, 6), (6, 7), (7, 6), (8, 3), (9, 1)]);
+    static ref POSSIBLE_DICE_ROLLS: Vec<(usize, usize, usize)> = (1..=3)
+        .flat_map(|i| (1..=3).flat_map(move |j| (1..=3).map(move |k| (i, j, k))))
+        .collect();
+}
+
+#[derive(PartialEq, Eq, Hash, Clone)]
 struct DiracDiceGame {
     pawns: [usize; 2],
     scores: [usize; 2],
     current_player: usize, // Rust why tf can't i make a union type of usize literals -> 0 | 1
-    num_turns_played: usize,
-    die: Box<dyn Iterator<Item = usize>>,
 }
 
 impl DiracDiceGame {
-    fn new(initial_pawn_positions: [usize; 2], die: Box<dyn Iterator<Item = usize>>) -> Self {
+    fn new(initial_pawn_positions: [usize; 2]) -> Self {
         DiracDiceGame {
             pawns: initial_pawn_positions,
-            scores: [0, 2],
+            scores: [0, 0],
             current_player: 0,
-            num_turns_played: 0,
-            die,
         }
     }
 
-    fn play_next_turn(&mut self) {
-        let advance_by: usize = (0..3).map(|_| self.die.next().unwrap()).sum();
-
+    fn play_next_turn(&self, advance_by: usize) -> Self {
         let pawn_position = self.pawns[self.current_player];
         let next_position = ((pawn_position + advance_by - 1) % 10) + 1;
 
-        self.pawns[self.current_player] = next_position;
-        self.scores[self.current_player] += next_position;
-        self.current_player = if self.current_player == 0 { 1 } else { 0 };
-        self.num_turns_played += 1;
+        let mut next_pawns = self.pawns;
+        let mut next_scores = self.scores;
+
+        next_pawns[self.current_player] = next_position;
+        next_scores[self.current_player] += next_position;
+
+        DiracDiceGame {
+            pawns: next_pawns,
+            scores: next_scores,
+            current_player: if self.current_player == 0 { 1 } else { 0 },
+        }
+    }
+
+    fn count_wins(&self) -> [usize; 2] {
+        let mut cache = HashMap::new();
+        self.count_wins_helper(&mut cache)
+    }
+
+    fn count_wins_helper(&self, cache: &mut HashMap<DiracDiceGame, [usize; 2]>) -> [usize; 2] {
+        // if in winning state, report winner and loser
+        if self.scores[0] >= 21 {
+            [1, 0]
+        } else if self.scores[1] >= 21 {
+            [0, 1]
+        } else if let Some(cached_wins) = cache.get(self) {
+            *cached_wins
+        } else {
+            // otherwise explore possible futures, sum win states for each future
+            // let wins = ROLL_FREQUENCY
+            //     .iter()
+            //     .map(|(advance_by, num_futures)| {
+            //         let mut future_wins = self.play_next_turn(*advance_by).count_wins_helper(cache);
+            //         // this possible future will occur num_futures times
+            //         future_wins[self.current_player] *= num_futures;
+            //         future_wins
+            //     })
+            //     .reduce(|acc, wins| [acc[0] + wins[0], acc[1] + wins[1]])
+            //     .unwrap();
+
+            let wins = POSSIBLE_DICE_ROLLS
+                .iter()
+                .map(|(i, j, k)| self.play_next_turn(i + j + k).count_wins_helper(cache))
+                .reduce(|acc, wins| [acc[0] + wins[0], acc[1] + wins[1]])
+                .unwrap();
+
+            // cache in case we hit this state in other branches
+            cache.insert(self.clone(), wins);
+            wins
+        }
     }
 }
 
@@ -39,33 +91,44 @@ impl Debug for DiracDiceGame {
             .field("pawns", &self.pawns)
             .field("scores", &self.scores)
             .field("current_player", &self.current_player)
-            .field("num_turns_played", &self.num_turns_played)
             .finish()
     }
 }
 
 fn main() {
     let filename = "input/input.txt";
-    let mut pawn_positions = parse_input_file(filename);
+    let pawn_positions = parse_input_file(filename);
 
     println!("pawn_positions: {:?}", pawn_positions);
     println!();
 
-    let mut dice_game = DiracDiceGame::new(pawn_positions, Box::new(deterministic_dice()));
+    // Part 1
 
+    let mut dice_game = DiracDiceGame::new(pawn_positions);
+
+    let mut die = deterministic_die();
+    let mut num_dice_rolls = 0;
     while dice_game.scores.iter().all(|s| *s < 1000) {
-        dice_game.play_next_turn();
+        // for _ in (0..1) {
+        let advance_by = (0..3).map(|_| die.next().unwrap()).sum();
+        num_dice_rolls += 3;
+        dice_game = dice_game.play_next_turn(advance_by);
     }
 
     println!("end state: {:?}", dice_game);
 
-    let num_dice_rolls = dice_game.num_turns_played * 3;
     let losing_score = dice_game.scores[dice_game.current_player];
     let part1 = num_dice_rolls * losing_score;
     println!("part1 answer: {}", part1);
+
+    // Part 2
+
+    dice_game = DiracDiceGame::new(pawn_positions);
+    let wins = dice_game.count_wins();
+    println!("wins: {:?}", wins);
 }
 
-fn deterministic_dice() -> impl Iterator<Item = usize> {
+fn deterministic_die() -> impl Iterator<Item = usize> {
     (1..=100).cycle()
 }
 
