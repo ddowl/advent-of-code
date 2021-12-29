@@ -8,10 +8,10 @@ use std::fs;
 
 lazy_static! {
     static ref ORGANIZED_SIDE_ROOMS: [Vec<Amphipod>; 4] = [
-        vec![Amphipod::A, Amphipod::A],
-        vec![Amphipod::B, Amphipod::B],
-        vec![Amphipod::C, Amphipod::C],
-        vec![Amphipod::D, Amphipod::D],
+        vec![Amphipod::A, Amphipod::A, Amphipod::A, Amphipod::A],
+        vec![Amphipod::B, Amphipod::B, Amphipod::B, Amphipod::B],
+        vec![Amphipod::C, Amphipod::C, Amphipod::C, Amphipod::C],
+        vec![Amphipod::D, Amphipod::D, Amphipod::D, Amphipod::D],
     ];
     static ref STARTING_TEST_SIDE_ROOMS: [Vec<Amphipod>; 4] = [
         vec![Amphipod::A, Amphipod::B],
@@ -50,13 +50,16 @@ struct Burrow {
     hallways: [Option<Amphipod>; 11],
     // room is stack
     rooms: [Vec<Amphipod>; 4],
+    room_size: usize,
 }
 
 impl Burrow {
     fn new(rooms: [Vec<Amphipod>; 4]) -> Self {
+        let room_size = rooms[0].len();
         Burrow {
             hallways: Default::default(),
             rooms,
+            room_size,
         }
     }
 
@@ -67,6 +70,14 @@ impl Burrow {
     }
 
     fn is_organized(&self) -> bool {
+        // for room_idx in 0..4 {
+        //     let expected_amphipod = ORGANIZED_AMPHIPOD_ROOMS[room_idx];
+        //     let room = &self.rooms[room_idx];
+        //     if room.len() != self.room_size || room.iter().any(|a| a != &expected_amphipod) {
+        //         return false;
+        //     }
+        // }
+        // true
         self.rooms[..] == ORGANIZED_SIDE_ROOMS[..]
     }
 
@@ -104,10 +115,6 @@ impl Burrow {
             }
         };
 
-        // println!("valid_left: {}", valid_left);
-        // println!("valid_right: {}", valid_right);
-        // println!("room_hallway_idx: {}", room_hallway_idx);
-
         VALID_HALLWAY_IDXS
             .iter()
             .filter(|&&i| {
@@ -121,7 +128,7 @@ impl Burrow {
     fn room_is_organized(&self, room_idx: usize) -> bool {
         let expected_amphipod = ORGANIZED_AMPHIPOD_ROOMS[room_idx];
         let room = self.rooms.get(room_idx).unwrap();
-        room.len() == 2 && room.iter().all(|a| a == &expected_amphipod)
+        room.len() == self.room_size && room.iter().all(|a| a == &expected_amphipod)
     }
 
     fn moves(&self) -> Vec<Move> {
@@ -129,7 +136,7 @@ impl Burrow {
 
         for unorganized_room_idx in (0..4).filter(|&i| !self.room_is_organized(i)) {
             let from_location = Room(unorganized_room_idx);
-            let unorganized_room = self.rooms.get(unorganized_room_idx as usize).unwrap();
+            let unorganized_room = self.rooms.get(unorganized_room_idx).unwrap();
             if let Some(moving_amphipod) = unorganized_room.last() {
                 // room to hallway
                 let reachable_hallway_idxs = self.reachable_hallways(unorganized_room_idx);
@@ -155,7 +162,7 @@ impl Burrow {
 
                 let destination_room = self.rooms.get(destination_room_idx).unwrap();
                 // path must not be blocked and destination room must have space and not contain other types of amphipods
-                let unorganized_room_hallway_idx = 2 + 2 * unorganized_room_idx as usize;
+                let unorganized_room_hallway_idx = 2 + 2 * unorganized_room_idx;
                 let destination_room_hallway_idx = 2 + 2 * destination_room_idx;
 
                 let min_hidx = min(unorganized_room_hallway_idx, destination_room_hallway_idx);
@@ -169,7 +176,7 @@ impl Burrow {
                     .any(|hallway_idx| hallway_idx > min_hidx && hallway_idx < max_hidx);
 
                 if !path_to_dest_room_blocked
-                    && destination_room.len() < 2
+                    && destination_room.len() < self.room_size
                     && destination_room.iter().all(|a| a == moving_amphipod)
                 {
                     valid_next_moves.push(Move {
@@ -207,7 +214,7 @@ impl Burrow {
                 .any(|hallway_idx| hallway_idx > min_hidx && hallway_idx < max_hidx);
 
             if !path_to_dest_room_blocked
-                && destination_room.len() < 2
+                && destination_room.len() < self.room_size
                 && destination_room.iter().all(|a| a == &moving_amphipod)
             {
                 valid_next_moves.push(Move {
@@ -243,6 +250,30 @@ impl Burrow {
             .rooms
             .iter()
             .map(|r| {
+                if r.len() < 4 {
+                    '.'
+                } else {
+                    amph_to_char(r.get(3).unwrap())
+                }
+            })
+            .collect();
+
+        let third_slots: Vec<char> = self
+            .rooms
+            .iter()
+            .map(|r| {
+                if r.len() < 3 {
+                    '.'
+                } else {
+                    amph_to_char(r.get(2).unwrap())
+                }
+            })
+            .collect();
+
+        let second_slots: Vec<char> = self
+            .rooms
+            .iter()
+            .map(|r| {
                 if r.len() < 2 {
                     '.'
                 } else {
@@ -266,6 +297,14 @@ impl Burrow {
         println!(
             "###{}#{}#{}#{}###",
             top_slots[0], top_slots[1], top_slots[2], top_slots[3]
+        );
+        println!(
+            "###{}#{}#{}#{}###",
+            third_slots[0], third_slots[1], third_slots[2], third_slots[3]
+        );
+        println!(
+            "###{}#{}#{}#{}###",
+            second_slots[0], second_slots[1], second_slots[2], second_slots[3]
         );
         println!(
             "  #{}#{}#{}#{}#",
@@ -292,7 +331,7 @@ impl BurrowLocation {
     fn is_open(&self, burrow: &Burrow) -> bool {
         match self {
             BurrowLocation::Hallway(i) => burrow.hallways[*i].is_none(),
-            BurrowLocation::Room(i) => burrow.rooms[*i].len() < 2,
+            BurrowLocation::Room(i) => burrow.rooms[*i].len() < burrow.room_size,
         }
     }
 
@@ -307,9 +346,10 @@ impl BurrowLocation {
         match self {
             BurrowLocation::Hallway(i) => (*i as isize, 0),
             // 0 => 2, 1 => 4, 2 => 6, 3 => 8
-            BurrowLocation::Room(i) => {
-                ((2 + 2 * i) as isize, (3 - burrow.rooms[*i].len()) as isize)
-            }
+            BurrowLocation::Room(i) => (
+                (2 + 2 * i) as isize,
+                ((burrow.room_size + 1) - burrow.rooms[*i].len()) as isize,
+            ),
         }
     }
 }
@@ -336,7 +376,10 @@ impl Move {
         let to_pos = match self.to {
             BurrowLocation::Hallway(i) => (i as isize, 0),
             // 0 => 2, 1 => 4, 2 => 6, 3 => 8
-            BurrowLocation::Room(i) => ((2 + 2 * i) as isize, (2 - burrow.rooms[i].len()) as isize),
+            BurrowLocation::Room(i) => (
+                (2 + 2 * i) as isize,
+                (burrow.room_size - burrow.rooms[i].len()) as isize,
+            ),
         };
 
         AMPHIPOD_ENERGY_COSTS[&amphipod] * manhattan_distance(&from_pos, &to_pos)
@@ -367,7 +410,7 @@ impl Move {
 }
 
 fn main() {
-    let filename = "input/input.txt";
+    let filename = "input/part2_input.txt";
     let rooms = parse_input_file(filename);
 
     let burrow = Burrow::new(rooms);
@@ -375,7 +418,8 @@ fn main() {
     println!();
 
     let get_neighbors = |burrow: &Burrow| {
-        // println!("get neighbors for burrow: {:?}", burrow);
+        // burrow.print();
+        // println!();
         burrow
             .moves()
             .iter()
@@ -397,6 +441,8 @@ fn main() {
             println!("cost to move: {}", bc);
             println!();
         }
+    } else {
+        println!("not solvable");
     }
 }
 
@@ -405,7 +451,7 @@ fn parse_input_file(filename: &str) -> [Vec<Amphipod>; 4] {
     let amphipod_strs: Vec<_> = file_contents
         .split('\n')
         .skip(2)
-        .take(2)
+        .take(4)
         .map(|l| {
             (3..=9)
                 .step_by(2)
@@ -420,7 +466,7 @@ fn parse_input_file(filename: &str) -> [Vec<Amphipod>; 4] {
         })
         .collect();
 
-    assert_eq!(amphipod_strs.len(), 2);
+    assert_eq!(amphipod_strs.len(), 4);
     assert_eq!(amphipod_strs.get(0).unwrap().len(), 4);
     assert_eq!(amphipod_strs.get(1).unwrap().len(), 4);
 
@@ -428,10 +474,30 @@ fn parse_input_file(filename: &str) -> [Vec<Amphipod>; 4] {
     let bs = &amphipod_strs[1];
 
     [
-        vec![bs[0], ts[0]],
-        vec![bs[1], ts[1]],
-        vec![bs[2], ts[2]],
-        vec![bs[3], ts[3]],
+        vec![
+            amphipod_strs[3][0],
+            amphipod_strs[2][0],
+            amphipod_strs[1][0],
+            amphipod_strs[0][0],
+        ],
+        vec![
+            amphipod_strs[3][1],
+            amphipod_strs[2][1],
+            amphipod_strs[1][1],
+            amphipod_strs[0][1],
+        ],
+        vec![
+            amphipod_strs[3][2],
+            amphipod_strs[2][2],
+            amphipod_strs[1][2],
+            amphipod_strs[0][2],
+        ],
+        vec![
+            amphipod_strs[3][3],
+            amphipod_strs[2][3],
+            amphipod_strs[1][3],
+            amphipod_strs[0][3],
+        ],
     ]
 }
 
@@ -470,6 +536,7 @@ mod tests {
         let burrow_with_occupied_middle_hallway = Burrow {
             hallways: occupied_middle_hallway,
             rooms: STARTING_TEST_SIDE_ROOMS.clone(),
+            room_size: 2,
         };
 
         for i in 0..=1 {
@@ -492,6 +559,7 @@ mod tests {
         let burrow_with_no_first_room_moves = Burrow {
             hallways: occupied_hallway_around_first_room,
             rooms: STARTING_TEST_SIDE_ROOMS.clone(),
+            room_size: 2,
         };
         assert_eq!(burrow_with_no_first_room_moves.reachable_hallways(0), []);
     }
