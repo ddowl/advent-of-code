@@ -100,6 +100,26 @@ impl ALU {
     }
 }
 
+struct MONAD {
+    alu: ALU,
+}
+
+impl MONAD {
+    fn new(alu: ALU) -> Self {
+        MONAD { alu }
+    }
+
+    fn is_valid_model_number(&mut self, n: usize) -> bool {
+        let digits: Vec<isize> = n
+            .to_string()
+            .chars()
+            .map(|d| d.to_digit(10).unwrap() as isize)
+            .collect();
+        let result = self.alu.run(digits);
+        return result[3] == 0;
+    }
+}
+
 fn main() {
     let filename = "input/input.txt";
     let program = parse_input_file(filename);
@@ -107,29 +127,14 @@ fn main() {
     println!("program: {:?}", program);
     println!();
 
-    let mut alu = ALU::new().with_program(program);
+    let candidate_model_num: usize = 51316214181141;
+    println!("candidate_model_num: {}", candidate_model_num);
 
-    for candidate_model_num in (0..=99999999999999_usize).rev() {
-        let digits: Vec<isize> = candidate_model_num
-            .to_string()
-            .chars()
-            .map(|d| d.to_digit(10).unwrap() as isize)
-            .collect();
-
-        if digits.contains(&0) {
-            continue;
-        }
-
-        let result = alu.run(digits);
-
-        // println!("{}: {:?}", candidate_model_num, result);
-
-        if result[3] == 0 {
-            println!("MONAD model number is valid");
-            println!("candidate_model_num: {}", candidate_model_num);
-            println!("result: {:?}", result);
-            break;
-        }
+    let alu = ALU::new().with_program(program);
+    if MONAD::new(alu).is_valid_model_number(candidate_model_num) {
+        println!("MONAD model number is valid");
+    } else {
+        println!("MONAD model number is NOT valid");
     }
 }
 
