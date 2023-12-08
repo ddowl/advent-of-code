@@ -33,17 +33,29 @@ func spelledDigit(s string, idx int) *int {
 func calibrationValue(s string) int {
 	firstDigit := 0
 	lastDigit := 0
-	for i, c := range s {
-		if unicode.IsDigit(c) {
-			if firstDigit == 0 {
-				firstDigit = int(c - '0')
-			}
-			lastDigit = int(c - '0')
-		} else if digit := spelledDigit(s, i); digit != nil {
-			if firstDigit == 0 {
-				firstDigit = *digit
-			}
+
+	digitCheck := func(s string, idx int) *int {
+		char := rune(s[idx])
+		if unicode.IsDigit(char) {
+			digit := int(char - '0')
+			return &digit
+		} else if digit := spelledDigit(s, idx); digit != nil {
+			return digit
+		}
+		return nil
+	}
+
+	for i := 0; i < len(s); i++ {
+		if digit := digitCheck(s, i); digit != nil {
+			firstDigit = *digit
+			break
+		}
+	}
+
+	for i := len(s) - 1; i >= 0; i-- {
+		if digit := digitCheck(s, i); digit != nil {
 			lastDigit = *digit
+			break
 		}
 	}
 	return 10*firstDigit + lastDigit
