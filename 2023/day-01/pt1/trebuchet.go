@@ -1,22 +1,13 @@
 package main
 
 import (
+	"aoc/day-01/input"
 	"fmt"
-	"os"
 	"regexp"
 	"strconv"
-	"strings"
 )
 
 var DigitRegex = regexp.MustCompile("[0-9]")
-
-func readFile(filename string) ([]string, error) {
-	content, err := os.ReadFile(filename) // the file is inside the local directory
-	if err != nil {
-		return nil, err
-	}
-	return strings.Split(string(content), "\n"), nil
-}
 
 func calibrationValue(s string) (int, error) {
 	digits := DigitRegex.FindAllString(s, -1)
@@ -32,7 +23,7 @@ func calibrationValue(s string) (int, error) {
 }
 
 func main() {
-	lines, err := readFile("input.txt")
+	lines, err := input.ReadPuzzleInput()
 	if err != nil {
 		fmt.Println(err)
 		return
