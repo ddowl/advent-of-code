@@ -7,14 +7,30 @@ import (
 	"github.com/samber/lo"
 )
 
-func isPartNumber(numPos input.NumberPosition, symbolPositions []input.Position) bool {
-	y1 := numPos.Y - 1
-	y2 := numPos.Y + 1
-	x1 := numPos.XStart - 1
-	x2 := numPos.XEnd + 1
-	return lo.SomeBy(symbolPositions, func(symPos input.Position) bool {
-		// Is the given symbol adjacent to the number?
-		return symPos.Y >= y1 && symPos.Y <= y2 && symPos.X >= x1 && symPos.X <= x2
+type Rectangle struct {
+	X1 int
+	X2 int
+	Y1 int
+	Y2 int
+}
+
+func isAdjacent(symPos input.SymbolPosition, bounds Rectangle) bool {
+	return symPos.Y >= bounds.Y1 && symPos.Y <= bounds.Y2 && symPos.X >= bounds.X1 && symPos.X <= bounds.X2
+}
+
+func getAdjacencyBounds(numPos input.NumberPosition) Rectangle {
+	return Rectangle{
+		Y1: numPos.Y - 1,
+		Y2: numPos.Y + 1,
+		X1: numPos.XStart - 1,
+		X2: numPos.XEnd + 1,
+	}
+}
+
+func isPartNumber(numPos input.NumberPosition, symbolPositions []input.SymbolPosition) bool {
+	adjBounds := getAdjacencyBounds(numPos)
+	return lo.SomeBy(symbolPositions, func(symPos input.SymbolPosition) bool {
+		return isAdjacent(symPos, adjBounds)
 	})
 }
 

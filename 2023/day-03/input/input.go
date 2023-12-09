@@ -11,7 +11,7 @@ import (
 
 type EngineSchematic struct {
 	NumberPositions []NumberPosition
-	SymbolPositions []Position
+	SymbolPositions []SymbolPosition
 }
 
 type NumberPosition struct {
@@ -21,9 +21,10 @@ type NumberPosition struct {
 	XEnd   int
 }
 
-type Position struct {
-	X int
-	Y int
+type SymbolPosition struct {
+	Symbol string
+	X      int
+	Y      int
 }
 
 var DigitRegex = regexp.MustCompile(`\d+`)
@@ -48,9 +49,9 @@ func parsePuzzle(filename string) (*EngineSchematic, error) {
 		})
 	})
 
-	symbolPositions := lo.FlatMap(lines, func(line string, row int) []Position {
-		return lo.Map(SymbolRegex.FindAllStringIndex(line, -1), func(idxs []int, index int) Position {
-			return Position{X: idxs[0], Y: row}
+	symbolPositions := lo.FlatMap(lines, func(line string, row int) []SymbolPosition {
+		return lo.Map(SymbolRegex.FindAllStringIndex(line, -1), func(idxs []int, index int) SymbolPosition {
+			return SymbolPosition{Symbol: string(line[idxs[0]]), X: idxs[0], Y: row}
 		})
 	})
 
