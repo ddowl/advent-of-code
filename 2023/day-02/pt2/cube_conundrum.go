@@ -3,9 +3,12 @@ package main
 import (
 	"aoc/day-02/input"
 	"fmt"
+
+	"github.com/samber/lo"
+	lop "github.com/samber/lo/parallel"
 )
 
-func fewestCubesInBag(game input.Game) map[string]int {
+func fewestCubesInBag(game input.Game, idx int) map[string]int {
 	bagContents := map[string]int{
 		"red":   0,
 		"green": 0,
@@ -29,16 +32,13 @@ func main() {
 	}
 
 	// Compute fewest cubes in bag for each game
-	minBags := make([]map[string]int, 0)
-	for _, game := range games {
-		minBags = append(minBags, fewestCubesInBag(game))
-	}
+	minBags := lop.Map(games, fewestCubesInBag)
 
 	// Sum the powers each set of cubes
-	sumOfPowers := 0
-	for _, bag := range minBags {
-		sumOfPowers += bag["red"] * bag["green"] * bag["blue"]
-	}
+	sumOfPowers := lo.Reduce(minBags, func(acc int, bag map[string]int, idx int) int {
+		acc += bag["red"] * bag["green"] * bag["blue"]
+		return acc
+	}, 0)
 
 	print(sumOfPowers)
 }
