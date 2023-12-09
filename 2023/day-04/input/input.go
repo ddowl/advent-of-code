@@ -1,7 +1,6 @@
 package input
 
 import (
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -21,7 +20,6 @@ func parsePuzzle(filename string) ([]ScratchCard, error) {
 		return nil, err
 	}
 	lines := strings.Split(string(contents), "\n")
-	fmt.Printf("%+v\n", lines)
 
 	splitInTwo := func(s string, delim string) (string, string) {
 		substrs := strings.Split(s, delim)
@@ -45,7 +43,7 @@ func parsePuzzle(filename string) ([]ScratchCard, error) {
 	scratchcards := lo.Map(lines, func(line string, _ int) ScratchCard {
 		cardIdStr, numberDataStr := splitInTwo(line, ":")
 
-		id := expectNumber(strings.Split(cardIdStr, " ")[1])
+		id := expectNumber(strings.Fields(cardIdStr)[1])
 		winningNumbersStr, numbersStr := splitInTwo(numberDataStr, " | ")
 
 		return ScratchCard{
