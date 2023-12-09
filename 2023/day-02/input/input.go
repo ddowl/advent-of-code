@@ -23,27 +23,31 @@ func readPuzzle(filename string) ([]Game, error) {
 	}
 	lines := strings.Split(string(content), "\n")
 	games := make([]Game, len(lines))
+	splitInTwo := func(s string, delim string) (string, string) {
+		substrs := strings.Split(s, delim)
+		return substrs[0], substrs[1]
+	}
+
 	for i, line := range lines {
-		substrs := strings.Split(line, ":")
-		id, err := strconv.Atoi(strings.Split(substrs[0], " ")[1])
+		gameIdStr, gameDetailsStr := splitInTwo(line, ":")
+		id, err := strconv.Atoi(strings.Split(gameIdStr, " ")[1])
 		if err != nil {
 			return nil, err
 		}
 
-		revealsStr := substrs[1]
 		reveals := make([][]CubeData, 0)
 
-		revealSetStrs := strings.Split(revealsStr, ";")
+		revealSetStrs := strings.Split(gameDetailsStr, ";")
 		for _, revealSetStr := range revealSetStrs {
 			cubeDataStrs := strings.Split(revealSetStr, ", ")
 			cubeDatas := make([]CubeData, 0)
 			for _, cubeDataStr := range cubeDataStrs {
-				cubeDataSubstrs := strings.Split(strings.TrimSpace(cubeDataStr), " ")
-				numCubes, err := strconv.Atoi(cubeDataSubstrs[0])
+				numStr, colorStr := splitInTwo(strings.TrimSpace(cubeDataStr), " ")
+				numCubes, err := strconv.Atoi(numStr)
 				if err != nil {
 					return nil, err
 				}
-				cubeDatas = append(cubeDatas, CubeData{Num: numCubes, Color: cubeDataSubstrs[1]})
+				cubeDatas = append(cubeDatas, CubeData{Num: numCubes, Color: colorStr})
 			}
 			reveals = append(reveals, cubeDatas)
 		}
