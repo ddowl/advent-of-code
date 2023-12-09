@@ -1,7 +1,6 @@
 package input
 
 import (
-	"fmt"
 	"os"
 	"regexp"
 	"strconv"
@@ -30,13 +29,12 @@ type Position struct {
 var DigitRegex = regexp.MustCompile(`\d+`)
 var SymbolRegex = regexp.MustCompile(`[^\w\s.]`)
 
-func readPuzzle(filename string) (*EngineSchematic, error) {
+func parsePuzzle(filename string) (*EngineSchematic, error) {
 	contents, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
 	lines := strings.Split(string(contents), "\n")
-	fmt.Println(lines)
 
 	// To parse, map over lines twice, running a multichar digit regex and a symbol regex to collect
 	// number and symbol positions.
@@ -59,10 +57,10 @@ func readPuzzle(filename string) (*EngineSchematic, error) {
 	return &EngineSchematic{NumberPositions: numberPositions, SymbolPositions: symbolPositions}, nil
 }
 
-func ReadPuzzle() (*EngineSchematic, error) {
-	return readPuzzle("input/input.txt")
+func ParsePuzzle() (*EngineSchematic, error) {
+	return parsePuzzle("input/input.txt")
 }
 
-func ReadTestPuzzle() (*EngineSchematic, error) {
-	return readPuzzle("input/test.txt")
+func ParseTestPuzzle() (*EngineSchematic, error) {
+	return parsePuzzle("input/test.txt")
 }

@@ -1,6 +1,6 @@
 module aoc/day-03
 
-go 1.21.5
+go 1.21
 
 require github.com/samber/lo v1.39.0
 
