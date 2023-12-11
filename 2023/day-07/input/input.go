@@ -28,7 +28,7 @@ func parseNumbers(s string) []int {
 }
 
 type Hand struct {
-	Cards map[string]int
+	Cards string
 	Bid   int
 }
 
@@ -41,27 +41,8 @@ func parse(filename string) ([]Hand, error) {
 	return lo.Map(lines, func(line string, _ int) Hand {
 		cardsStr, bidStr := splitInTwo(line, " ")
 
-		cards := lo.Reduce(strings.Split(cardsStr, ""), func(acc map[string]int, card string, _ int) map[string]int {
-			acc[card]++
-			return acc
-		}, map[string]int{
-			"A": 0,
-			"K": 0,
-			"Q": 0,
-			"J": 0,
-			"T": 0,
-			"9": 0,
-			"8": 0,
-			"7": 0,
-			"6": 0,
-			"5": 0,
-			"4": 0,
-			"3": 0,
-			"2": 0,
-		})
-
 		return Hand{
-			Cards: cards,
+			Cards: cardsStr,
 			Bid:   expectNumber(bidStr),
 		}
 	}), nil
