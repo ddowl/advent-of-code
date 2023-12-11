@@ -25,9 +25,11 @@ func numWaysToWin(race input.Race) (int, error) {
 }
 
 func main() {
-	race, err := input.ParseTest2()
+	race, err := input.Parse2()
 	if err != nil {
 		panic(err)
 	}
 	fmt.Printf("%+v\n", race)
+
+	fmt.Println(numWaysToWin(race))
 }
