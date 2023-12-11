@@ -3,36 +3,29 @@ package main
 import (
 	"aoc/day-05/input"
 	"fmt"
-	"math"
 
 	"github.com/samber/lo"
-	lop "github.com/samber/lo/parallel"
 )
-
-/*
-This solution could be better optimized.
-E.g. we could use the fact that many inputs map to the same outputs to compress our
-category maps into one seed-to-location map, and compress seed inputs into ranges that apply to the domain of that map.
-*/
 
 type CategoryMap struct {
 	Ranges []input.Range
 }
 
-func (cm CategoryMap) ToDestCategory(n int) int {
+func (cm CategoryMap) ToSourceCategory(n int) int {
 	for _, rg := range cm.Ranges {
-		if n >= rg.SourceStart && n <= (rg.SourceStart+rg.Len) {
+		if n >= rg.DestStart && n < (rg.DestStart+rg.Len) {
 			// `n` falls into this range!
-			return rg.DestStart + n - rg.SourceStart
+			return rg.SourceStart + n - rg.DestStart
 		}
 	}
 	return n
 }
 
-func toLocNum(seed int, categoryMaps []CategoryMap) int {
-	catNum := seed
-	for _, cm := range categoryMaps {
-		catNum = cm.ToDestCategory(catNum)
+func toSeedNum(loc int, categoryMaps []CategoryMap) int {
+	catNum := loc
+	for i := len(categoryMaps) - 1; i >= 0; i-- {
+		cm := categoryMaps[i]
+		catNum = cm.ToSourceCategory(catNum)
 	}
 	return catNum
 }
@@ -46,29 +39,19 @@ func main() {
 	categoryMaps := lo.Map(almanac.Maps, func(rgs []input.Range, _ int) CategoryMap {
 		return CategoryMap{Ranges: rgs}
 	})
-	fmt.Println(almanac.Seeds)
-	// fmt.Println(categoryMaps)
+	// fmt.Println(almanac.Seeds)
+	seedRanges := lo.Chunk(almanac.Seeds, 2)
 
-	locationNums := lop.Map(lo.Chunk(almanac.Seeds, 2), func(pair []int, _ int) int {
-		fmt.Println("starting pair: ", pair)
-		locNumChan := make(chan int, pair[1])
+	// Check all location numbers starting from 0
+	// break after finding first instance that maps to a seed number
+	for locNum := 0; true; locNum++ {
+		seedNum := toSeedNum(locNum, categoryMaps)
 
-		for i := pair[0]; i < pair[0]+pair[1]; i++ {
-			go func(n int) {
-				locNum := toLocNum(n, categoryMaps)
-				locNumChan <- locNum
-			}(i)
+		if lo.ContainsBy(seedRanges, func(pair []int) bool {
+			return seedNum >= pair[0] && seedNum < pair[0]+pair[1]
+		}) {
+			fmt.Println("Found lowest seed number", seedNum, "at location", locNum)
+			break
 		}
-
-		minLocationNum := math.MaxInt64
-		for i := 0; i < pair[1]; i++ {
-			locNum := <-locNumChan
-			minLocationNum = min(minLocationNum, locNum)
-		}
-		fmt.Println("min location num: ", minLocationNum)
-		return minLocationNum
-	})
-
-	fmt.Println(locationNums)
-	fmt.Println(lo.Min(locationNums))
+	}
 }
