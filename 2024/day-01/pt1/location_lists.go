@@ -2,30 +2,21 @@ package main
 
 import (
 	"day-01/input"
+	"math"
 	"sort"
 )
 
 func calculateTotalDistance(left, right []int) int {
-	// Make copies to avoid modifying original slices
-	leftSorted := make([]int, len(left))
-	rightSorted := make([]int, len(right))
-	copy(leftSorted, left)
-	copy(rightSorted, right)
-
-	// Sort both lists
+	// Sort copies of input slices
+	leftSorted := append([]int{}, left...)
+	rightSorted := append([]int{}, right...)
 	sort.Ints(leftSorted)
 	sort.Ints(rightSorted)
 
-	// Calculate total distance
 	totalDistance := 0
-	for i := 0; i < len(leftSorted); i++ {
-		distance := leftSorted[i] - rightSorted[i]
-		if distance < 0 {
-			distance = -distance
-		}
-		totalDistance += distance
+	for i := range leftSorted {
+		totalDistance += int(math.Abs(float64(leftSorted[i] - rightSorted[i])))
 	}
-
 	return totalDistance
 }
 
