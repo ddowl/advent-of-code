@@ -6,6 +6,7 @@ import (
 	"sort"
 )
 
+// SICK COMMENT DUDE
 func calculateTotalDistance(left, right []int) int {
 	// Sort copies of input slices
 	leftSorted := append([]int{}, left...)
